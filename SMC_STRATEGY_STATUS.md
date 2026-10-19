@@ -9,8 +9,9 @@ The current `app/strategy_smc.py` is a first implementation, not a verified repr
 - `_swings()` evaluates swing candidates using candles on both sides of each candidate. That means a swing is only knowable after later candles close; code must not treat it as known at the candidate candle's timestamp.
 - `evaluate_signal()` scans future 5-minute candles for a retest and can return a signal timestamped at that later retest. This is not a signal that was available at the start of the evaluation cycle.
 - Higher-timeframe bias depends on the exact candle timestamp/close convention. Comparing only ISO timestamp strings is not enough to prove a 1H candle was fully closed before a 5M decision.
-- Existing tests cover basic input validation and neutral/empty cases, but do not test future-data invariance, online-vs-batch equivalence, completed-candle timing, or a known expected signal from the original strategy.
-- `app/market_data.py` is a placeholder and `app/paper_runner.py` deliberately blocks without market data. No candle polling or order lifecycle is running in this repository.
+- Existing strategy tests do not test future-data invariance, online-vs-batch equivalence, completed-candle timing, or a known expected signal from the original strategy.
+- The read-only CoinDCX adapter is now called by the bounded paper audit runner when an exact futures pair is configured. The runner checks minimum history, timestamp ordering/duplicates, candle freshness, and 5-minute interval continuity.
+- The runner deliberately stops after data-quality checks. It does not call `evaluate_signal()`, maintain positions, or submit orders. This is intentional until the strategy's causal behavior and equivalence are proven.
 
 ## Required correctness criteria before any further status change
 
@@ -24,4 +25,4 @@ The current `app/strategy_smc.py` is a first implementation, not a verified repr
 ## Safety/status
 
 - This repository remains PAPER-only and has no exchange order-submission implementation.
-- Passing syntax/unit tests does not prove strategy equivalence, live data connectivity, profitability, or live readiness.
+- Passing syntax/unit tests does not prove strategy equivalence, profitability, exchange connectivity, or live readiness.
