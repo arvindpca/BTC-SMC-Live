@@ -68,7 +68,7 @@ def test_quality_check_rejects_too_few_candles():
 def test_quality_check_rejects_gaps():
     rows = [candle(i * 300_000) for i in range(8)]
     rows[-1] = candle(rows[-1]["timestamp"] + 600_000)
-    assert "missing/irregular" in paper_runner._quality_problem(rows, 10_000_000)
+    assert "missing/irregular" in paper_runner._quality_problem(rows, 3_600_000)
 
 
 def test_quality_check_rejects_stale_candles():
