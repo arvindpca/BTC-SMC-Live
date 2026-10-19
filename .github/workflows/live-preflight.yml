@@ -1,0 +1,31 @@
+name: Live Configuration Preflight (No Orders)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EXECUTION_MODE: PAPER
+      COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
+      COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
+      COINDCX_FUTURES_INSTRUMENT: ${{ vars.COINDCX_FUTURES_INSTRUMENT }}
+      COINDCX_MARGIN_CURRENCY: INR
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run non-executing preflight
+        run: python -m app.live_preflight
