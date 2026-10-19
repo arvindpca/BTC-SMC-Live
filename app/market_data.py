@@ -15,6 +15,7 @@ import requests
 
 BASE_URL = "https://public.coindcx.com/market_data/candlesticks"
 INTERVAL_SECONDS = 300
+_RESOLUTION_SECONDS = {"5": 300, "60": 3600}
 DEFAULT_LIMIT = 100
 TIMEOUT_SECONDS = 10
 
@@ -33,8 +34,9 @@ def fetch_latest_candles(
     *,
     now_seconds: int | None = None,
     session: Any = requests,
+    resolution: str = "5",
 ) -> list[dict[str, float | int]]:
-    """Fetch completed 5-minute futures candles in ascending time order.
+    """Fetch completed futures candles ("5" = 5m default, "60" = 1h) in ascending order.
 
     Returns dictionaries with timestamp (UTC epoch milliseconds), open, high,
     low, close and volume. The currently forming candle is always excluded.
@@ -50,15 +52,18 @@ def fetch_latest_candles(
             "COINDCX_FUTURES_PAIR must be an exact CoinDCX futures pair such as "
             "the format returned by the official active-instruments endpoint."
         )
+    if resolution not in _RESOLUTION_SECONDS:
+        raise ValueError("resolution must be '5' or '60'")
+    interval = _RESOLUTION_SECONDS[resolution]
     if not isinstance(limit, int) or isinstance(limit, bool) or not 2 <= limit <= 500:
         raise ValueError("limit must be an integer from 2 to 500")
 
     now = int(time.time()) if now_seconds is None else int(now_seconds)
     params = {
         "pair": instrument,
-        "from": max(0, now - (limit + 2) * INTERVAL_SECONDS),
+        "from": max(0, now - (limit + 2) * interval),
         "to": now,
-        "resolution": "5",
+        "resolution": resolution,
         "pcode": "f",
     }
     try:
@@ -96,8 +101,8 @@ def fetch_latest_candles(
             continue
         if high < max(open_, low, close) or low > min(open_, high, close):
             continue
-        # A candle is usable only after its full 5-minute interval has closed.
-        if timestamp_ms + INTERVAL_SECONDS * 1000 > now * 1000:
+        # A candle is usable only after its full interval has closed.
+        if timestamp_ms + interval * 1000 > now * 1000:
             continue
         candles[timestamp_ms] = {
             "timestamp": timestamp_ms,
@@ -110,5 +115,5 @@ def fetch_latest_candles(
 
     result = [candles[key] for key in sorted(candles)]
     if not result:
-        raise MarketDataError("No valid completed 5-minute futures candles returned.")
+        raise MarketDataError("No valid completed futures candles returned.")
     return result[-limit:]

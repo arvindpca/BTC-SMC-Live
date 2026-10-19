@@ -1,0 +1,62 @@
+name: BTC-SMC Live Trading (CoinDCX INR futures)
+
+# Stage 1 (default): LIVE_MODE=OFF  -> does nothing.
+# Stage 2: set repo variable LIVE_MODE=DRY_RUN -> reads real data, logs the order it WOULD place.
+# Stage 3: set LIVE_MODE=LIVE and LIVE_CONFIRM=YES_TRADE_REAL_MONEY -> real orders.
+# Flip LIVE_MODE back to OFF (or disable this workflow) to stop trading immediately.
+# Open positions are protected by exchange-side SL/TP; stopping the bot does NOT close them.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub may delay or skip scheduled runs; exchange-side SL/TP covers that gap.
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: btc-smc-live
+  cancel-in-progress: false
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      LIVE_MODE: ${{ vars.LIVE_MODE || 'OFF' }}
+      LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM }}
+      COINDCX_FUTURES_PAIR: ${{ vars.COINDCX_FUTURES_PAIR }}
+      COINDCX_MARGIN_CURRENCY: INR
+      MARGIN_INR: ${{ vars.MARGIN_INR || '200' }}
+      LEVERAGE: ${{ vars.LEVERAGE || '30' }}
+      MAX_TRADES_PER_DAY: ${{ vars.MAX_TRADES_PER_DAY || '3' }}
+      COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
+      COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Restore duplicate-signal guard
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: live-state-${{ github.run_id }}
+          restore-keys: live-state-
+      - name: Run one trading cycle
+        run: python -m app.live_runner
+      - name: Save duplicate-signal guard
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: live-state-${{ github.run_id }}

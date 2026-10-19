@@ -1,0 +1,268 @@
+from pathlib import Path
+
+import pytest
+
+import app.live_runner as lr
+from app.coindcx_futures import CoinDCXError, FuturesClient
+from app.live_runner import (
+    CONFIRM_PHRASE,
+    ConfigError,
+    compute_quantity,
+    floor_to_step,
+    load_config,
+    round_price,
+    run_cycle,
+)
+from app.strategy_live import Signal
+
+BASE_ENV = {
+    "COINDCX_API_KEY": "k",
+    "COINDCX_API_SECRET": "s",
+    "COINDCX_FUTURES_PAIR": "B-BTC_USDT",
+}
+BTC_DETAILS = {"min_trade_size": 0.001, "quantity_increment": 0.001, "price_increment": 0.1}
+
+
+def cfg(**extra):
+    return load_config({**BASE_ENV, **extra})
+
+
+# ---------------- configuration gates ----------------
+def test_default_mode_is_off_and_needs_no_secrets():
+    config = load_config({})
+    assert config.mode == "OFF"
+
+
+def test_live_requires_confirmation_phrase():
+    with pytest.raises(ConfigError):
+        cfg(LIVE_MODE="LIVE")
+    with pytest.raises(ConfigError):
+        cfg(LIVE_MODE="LIVE", LIVE_CONFIRM="yes")
+    assert cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE).mode == "LIVE"
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"LIVE_MODE": "DRY_RUN", "MARGIN_INR": "501"},
+        {"LIVE_MODE": "DRY_RUN", "MARGIN_INR": "0"},
+        {"LIVE_MODE": "DRY_RUN", "LEVERAGE": "31"},
+        {"LIVE_MODE": "DRY_RUN", "COINDCX_MARGIN_CURRENCY": "USDT"},
+        {"LIVE_MODE": "DRY_RUN", "COINDCX_FUTURES_PAIR": "BTCINR"},
+        {"LIVE_MODE": "NONSENSE"},
+    ],
+)
+def test_bad_config_blocked(extra):
+    with pytest.raises(ConfigError):
+        cfg(**extra)
+
+
+def test_missing_secrets_blocked_when_not_off():
+    with pytest.raises(ConfigError):
+        load_config({"LIVE_MODE": "DRY_RUN", "COINDCX_FUTURES_PAIR": "B-BTC_USDT"})
+
+
+# ---------------- sizing ----------------
+def test_floor_and_round_helpers():
+    assert floor_to_step(0.00279, 0.001) == 0.002
+    assert floor_to_step(1.0, 0.001) == 1.0
+    assert round_price(100.04, 0.1) == 100.0
+    assert round_price(100.06, 0.1) == 100.1
+
+
+def test_rs200_x30_is_below_btc_minimum_and_reports_needed_margin():
+    qty, info = compute_quantity(
+        price=100_000, margin_inr=200, leverage=30, quote="USDT", usdt_inr=88.0, details=BTC_DETAILS
+    )
+    assert qty == 0.0  # Rs6,000 notional buys only ~0.0007 BTC < 0.001 minimum
+    assert info["margin_needed_for_min_inr"] == pytest.approx(0.001 * 100_000 * 88 / 30)
+
+
+def test_sizing_ok_when_margin_large_enough():
+    qty, _ = compute_quantity(
+        price=100_000, margin_inr=2000, leverage=30, quote="USDT", usdt_inr=88.0, details=BTC_DETAILS
+    )
+    assert qty == 0.006  # floor(60000 / 8.8e6 ... = 0.00681) -> 0.006
+    assert qty * 100_000 * 88 / 30 <= 2000
+
+
+def test_inr_quoted_pair_needs_no_conversion():
+    qty, info = compute_quantity(
+        price=8_800_000, margin_inr=2000, leverage=30, quote="INR", usdt_inr=None, details=BTC_DETAILS
+    )
+    assert qty == 0.006 and info["price_inr"] == 8_800_000
+
+
+def test_refuses_to_guess_missing_step():
+    with pytest.raises(ValueError):
+        compute_quantity(price=1, margin_inr=100, leverage=1, quote="INR", usdt_inr=None, details={})
+
+
+# ---------------- cycle with a fake exchange ----------------
+class FakeExchange(FuturesClient):
+    def __init__(self, *, positions=None, fill=100_000.0, fail_tpsl=False, fail_order=False,
+                 details=None, sl_visible=True):
+        super().__init__("k", "s")
+        self.calls = []
+        self.positions = list(positions or [])
+        self.fill, self.fail_tpsl, self.fail_order = fill, fail_tpsl, fail_order
+        self.details = details or BTC_DETAILS
+        self.sl_visible = sl_visible
+        self.opened = None
+
+    def active_instruments(self):
+        return ["B-BTC_USDT"]
+
+    def instrument_details(self, pair):
+        return self.details
+
+    def usdt_inr_rate(self):
+        return 88.0
+
+    def list_positions(self):
+        if self.opened:
+            return [self.opened]
+        return self.positions
+
+    def create_market_order(self, **kw):
+        self.calls.append(("order", kw))
+        if self.fail_order:
+            raise CoinDCXError("HTTP 400 rejected")
+        self.opened = {"pair": "B-BTC_USDT", "active_pos": kw["quantity"], "id": "pos1",
+                       "avg_price": self.fill,
+                       "stop_loss_trigger": 99_000.0 if self.sl_visible else None}
+
+    def set_tpsl(self, **kw):
+        self.calls.append(("tpsl", kw))
+        if self.fail_tpsl:
+            raise CoinDCXError("HTTP 400 tpsl")
+
+    def exit_position(self, position_id):
+        self.calls.append(("exit", position_id))
+        self.opened = None
+
+    def kinds(self):
+        return [c[0] for c in self.calls]
+
+
+def make_signal(side="LONG", entry=100_000.0, stop=99_000.0):
+    risk = abs(entry - stop)
+    target = entry + 4 * risk if side == "LONG" else entry - 4 * risk
+    return Signal(side=side, entry=entry, stop=stop, target=target, risk_pct=risk / entry * 100,
+                  bar_time=1_800_000_000_000, bar_index=499, bias=side)
+
+
+def run(monkeypatch, tmp_path, config, exchange, signal, **kw):
+    monkeypatch.setattr(lr, "latest_signal", lambda *a, **k: signal)
+    messages = []
+    result = run_cycle(
+        config, client=exchange, fetch=lambda **k: [], state_path=tmp_path / "state.json",
+        notify=messages.append, sleep=lambda s: None, now=1_800_000_300, **kw,
+    )
+    return result, messages
+
+
+BIG = {"MARGIN_INR": "500"}  # cap-limited; use a details set with a smaller minimum below
+SMALL_MIN = {"min_trade_size": 0.0001, "quantity_increment": 0.0001, "price_increment": 0.1}
+
+
+def test_off_mode_does_nothing(monkeypatch, tmp_path):
+    ex = FakeExchange()
+    result, _ = run(monkeypatch, tmp_path, load_config({}), ex, make_signal())
+    assert result["status"] == "OFF" and ex.calls == []
+
+
+def test_no_signal_places_nothing(monkeypatch, tmp_path):
+    ex = FakeExchange()
+    result, _ = run(monkeypatch, tmp_path, cfg(LIVE_MODE="DRY_RUN"), ex, None)
+    assert result["status"] == "NO_SIGNAL" and ex.calls == []
+
+
+def test_dry_run_never_submits_orders(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    result, msgs = run(monkeypatch, tmp_path, cfg(LIVE_MODE="DRY_RUN", **BIG), ex, make_signal())
+    assert result["status"] == "DRY_RUN_WOULD_ORDER"
+    assert ex.calls == [] and result["orders_submitted"] == 0
+    assert "nothing sent" in msgs[0]
+
+
+def test_live_happy_path_places_exchange_side_sl_and_4r_tp(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    result, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "ORDER_PLACED_PROTECTED"
+    assert ex.kinds() == ["order", "tpsl"]
+    tpsl = ex.calls[1][1]
+    assert tpsl["stop_price"] == 99_000.0 and tpsl["target_price"] == 104_000.0
+    assert ex.calls[0][1]["quantity"] > 0 and ex.calls[0][1]["leverage"] == 30
+
+
+def test_short_side_prices(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    result, _ = run(monkeypatch, tmp_path, config, ex, make_signal("SHORT", 100_000, 101_000))
+    assert result["status"] == "ORDER_PLACED_PROTECTED"
+    assert ex.calls[0][1]["side"] == "sell"
+    assert ex.calls[1][1]["target_price"] == 96_000.0
+
+
+def test_tpsl_failure_triggers_failsafe_exit(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN, fail_tpsl=True)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    result, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "FAILSAFE_EXITED"
+    assert ex.kinds() == ["order", "tpsl", "exit"]
+
+
+def test_fill_far_from_plan_triggers_failsafe_exit(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN, fill=98_900.0)  # stop almost reached already
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    result, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "FAILSAFE_EXITED" and "tpsl" not in ex.kinds()
+
+
+def test_invisible_stop_after_placement_triggers_exit(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN, sl_visible=False)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    result, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "FAILSAFE_EXITED"
+
+
+def test_rejected_order_is_not_retried_next_run(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN, fail_order=True)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    first, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    second, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert first["status"] == "ORDER_REJECTED"
+    assert second["status"] == "DUPLICATE_SIGNAL"
+    assert ex.kinds().count("order") == 1
+
+
+def test_existing_position_blocks_new_order(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN, positions=[{"pair": "B-BTC_USDT", "active_pos": 0.1, "id": "x"}])
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    result, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "POSITION_OPEN" and ex.calls == []
+
+
+def test_below_minimum_order_is_blocked_with_explanation(monkeypatch, tmp_path):
+    ex = FakeExchange(details=BTC_DETAILS)  # real BTC minimum 0.001
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, MARGIN_INR="200")
+    result, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "BLOCKED_MIN_ORDER" and ex.calls == []
+    assert "minimum" in msgs[0]
+
+
+def test_daily_cap(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, MAX_TRADES_PER_DAY="1", **BIG)
+    lr.save_state({"last_signal_bar_time": 1, "day": "2027-01-15", "trades_today": 1}, tmp_path / "state.json")
+    result, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "DAILY_CAP" and ex.calls == []
+
+
+def test_secrets_not_in_notifications(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    _, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert all("COINDCX" not in m for m in msgs)

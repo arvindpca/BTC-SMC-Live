@@ -1,6 +1,6 @@
 # Readiness checklist — paper-only
 
-This repository is a non-executing scaffold. It is not an automated trading bot.
+The paper scaffold is non-executing. A separate, gated LIVE executor now exists (`app/live_runner.py`), OFF by default; see README. Items below marked [ ] are still unverified against the real exchange.
 
 ## Implemented
 - [x] GitHub Actions syntax/compile/test workflow.
@@ -11,7 +11,7 @@ This repository is a non-executing scaffold. It is not an automated trading bot.
 
 ## Not implemented / not verified
 - [ ] Live market-data adapter and timestamp/candle validation.
-- [ ] SMC signal logic and tests against a clearly specified strategy.
+- [x] Causal SMC signal logic (`app/strategy_live.py`), tested for future-data invariance and checked entry-by-entry against BTC_SMC_Paper.py on synthetic data.
 - [ ] Persistent position state and restart recovery.
 - [ ] Exchange account/position read-only integration.
 - [ ] Contract identity, quantity step, minimum order and margin requirements verified.
@@ -21,7 +21,7 @@ This repository is a non-executing scaffold. It is not an automated trading bot.
 - [ ] End-to-end paper session with reconciled position state.
 
 ## Safety
-- Keep EXECUTION_MODE=PAPER. No live order code is included.
+- Live orders are possible only with LIVE_MODE=LIVE and LIVE_CONFIRM=YES_TRADE_REAL_MONEY. Start with DRY_RUN.
 - Do not put credentials in source code, commits, logs, or chat.
 - GitHub-hosted scheduled jobs are best-effort and are not a continuous process or a reliable position monitor.
 - A passing test suite does not prove profitability or exchange connectivity.
