@@ -1,5 +1,27 @@
 # SMC strategy implementation status
 
-The strategy interface now includes deterministic helpers for unique 3-left/3-right swing points, 1H HH/HL or LH/LL bias, 5M sweep, CHOCH, FVG, retest confirmation, and 0.05%-2.50% risk validation with a 4R target.
+## Current status: NOT VERIFIED — DO NOT TREAT AS LIVE-READY
 
-This is a first implementation and must be independently reviewed against the original BTC_SMC_Paper.py before use. It is not yet wired to market-data polling or the paper order lifecycle. Input timestamps must be consistent sortable ISO-8601 values, and callers must supply only completed candles. No exchange connection or order placement exists.
+The current `app/strategy_smc.py` is a first implementation, not a verified reproduction of the user's two-month paper-trading strategy.
+
+## Audit findings from the current source
+
+- `_swings()` evaluates swing candidates using candles on both sides of each candidate. That means a swing is only knowable after later candles close; code must not treat it as known at the candidate candle's timestamp.
+- `evaluate_signal()` scans future 5-minute candles for a retest and can return a signal timestamped at that later retest. This is not a signal that was available at the start of the evaluation cycle.
+- Higher-timeframe bias depends on the exact candle timestamp/close convention. Comparing only ISO timestamp strings is not enough to prove a 1H candle was fully closed before a 5M decision.
+- Existing tests cover basic input validation and neutral/empty cases, but do not test future-data invariance, online-vs-batch equivalence, completed-candle timing, or a known expected signal from the original strategy.
+- `app/market_data.py` is a placeholder and `app/paper_runner.py` deliberately blocks without market data. No candle polling or order lifecycle is running in this repository.
+
+## Required correctness criteria before any further status change
+
+1. Preserve the original strategy specification and compare each rule against the original source and two-month paper-trading logs/fixtures.
+2. A signal emitted at time T must depend only on candles fully closed and available by T.
+3. Appending future candles must never change a signal that was already emitted for an earlier timestamp.
+4. Batch processing and candle-by-candle processing must agree on each historical decision timestamp.
+5. Test H1 close-time alignment, duplicate/missing/out-of-order candles, restart/replay behavior, and exact SL/TP tie handling.
+6. Keep the runner fail-closed until the above tests and data checks are complete.
+
+## Safety/status
+
+- This repository remains PAPER-only and has no exchange order-submission implementation.
+- Passing syntax/unit tests does not prove strategy equivalence, live data connectivity, profitability, or live readiness.
