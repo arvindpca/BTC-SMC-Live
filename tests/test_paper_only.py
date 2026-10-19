@@ -21,5 +21,6 @@ def test_runner_safely_reports_missing_candles(monkeypatch, tmp_path):
     assert run_cycle(data_dir="missing") == 0
     reports = list((tmp_path / "reports").glob("paper-run-*.json"))
     assert len(reports) == 1
-    assert '"orders_submitted": 0' in reports[0].read_text()
-    assert "BLOCKED_NO_CANDLE_DATA" in reports[0].read_text()
+    report = reports[0].read_text()
+    assert '"orders_submitted": 0' in report
+    assert "BLOCKED_NO_MARKET_DATA" in report

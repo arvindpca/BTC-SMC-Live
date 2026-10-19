@@ -3,21 +3,22 @@ from __future__ import annotations
 
 from app.config import check_paper_only
 from app.reporting import write_report
-from app.strategy_smc import evaluate_signal
 
 
-def run_cycle() -> int:
+def run_cycle(data_dir: str = "data") -> int:
+    """Fail closed until a verified market-data adapter and causal strategy exist.
+
+    data_dir is accepted for compatibility with the offline fixture test. This
+    runner deliberately does not read files or call an exchange yet.
+    """
     check_paper_only()
-    try:
-        evaluate_signal([])
-    except NotImplementedError:
-        report = write_report(
-            "BLOCKED_NO_STRATEGY",
-            "Paper cycle safely stopped: market data and SMC signal logic are not implemented. No orders submitted.",
-        )
-        print(f"Paper cycle blocked safely; report={report}; orders_submitted=0")
-        return 0
-    raise RuntimeError("Unexpected strategy implementation detected; review before running.")
+    report = write_report(
+        "BLOCKED_NO_MARKET_DATA",
+        "No market-data adapter is configured and the SMC strategy has not passed "
+        "causal/look-ahead validation. No candles evaluated; no orders submitted.",
+    )
+    print(f"Paper cycle blocked safely; report={report}; orders_submitted=0")
+    return 0
 
 
 def main() -> None:
