@@ -18,18 +18,20 @@ def run_preflight():
         sys.exit(1)
     print("PASS/CHECK: COINDCX_API_SECRET is present")
     
-    # 2. Set defaults if missing from environment/secrets
-    os.environ["COINDCX_FUTURES_INSTRUMENT"] = os.getenv("COINDCX_FUTURES_INSTRUMENT", "B-BTC_USDT")
-    os.environ["COINDCX_MARGIN_CURRENCY"] = os.getenv("COINDCX_MARGIN_CURRENCY", "INR")
-    
-    print(f"PASS/CHECK: Instrument set to {os.getenv('COINDCX_FUTURES_INSTRUMENT')}")
-    print(f"PASS/CHECK: Margin currency set to {os.getenv('COINDCX_MARGIN_CURRENCY')}")
+    # 2. Assign defaults if environment variables or secrets are empty
+    if not os.getenv("COINDCX_FUTURES_INSTRUMENT"):
+        os.environ["COINDCX_FUTURES_INSTRUMENT"] = "B-BTC_USDT"
+    if not os.getenv("COINDCX_MARGIN_CURRENCY"):
+        os.environ["COINDCX_MARGIN_CURRENCY"] = "INR"
+        
+    print(f"PASS/CHECK: COINDCX_FUTURES_INSTRUMENT is set to {os.getenv('COINDCX_FUTURES_INSTRUMENT')}")
+    print(f"PASS/CHECK: COINDCX_MARGIN_CURRENCY is set to {os.getenv('COINDCX_MARGIN_CURRENCY')}")
     
     # 3. Telegram Check
     if os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID"):
-        print("PASS/CHECK: Telegram credentials present")
+        print("PASS/CHECK: Telegram credentials are present")
     else:
-        print("WARNING: Telegram credentials missing")
+        print("WARNING: Telegram credentials incomplete")
 
     print("PREFLIGHT PASSED: Ready for Live Trading Execution.")
     sys.exit(0)
