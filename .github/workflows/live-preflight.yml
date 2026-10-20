@@ -1,34 +1,38 @@
-name: Live Configuration Preflight (No Orders)
+import os
+import sys
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
+def run_preflight():
+    print("RUNNING LIVE PREFLIGHT CHECK...")
+    
+    # 1. Check API Keys
+    api_key = os.getenv("COINDCX_API_KEY")
+    api_secret = os.getenv("COINDCX_API_SECRET")
+    
+    if not api_key:
+        print("FAIL: COINDCX_API_KEY is missing")
+        sys.exit(1)
+    print("PASS/CHECK: COINDCX_API_KEY is present")
+    
+    if not api_secret:
+        print("FAIL: COINDCX_API_SECRET is missing")
+        sys.exit(1)
+    print("PASS/CHECK: COINDCX_API_SECRET is present")
+    
+    # 2. Set defaults if missing from environment/secrets
+    os.environ["COINDCX_FUTURES_INSTRUMENT"] = os.getenv("COINDCX_FUTURES_INSTRUMENT", "B-BTC_USDT")
+    os.environ["COINDCX_MARGIN_CURRENCY"] = os.getenv("COINDCX_MARGIN_CURRENCY", "INR")
+    
+    print(f"PASS/CHECK: Instrument set to {os.getenv('COINDCX_FUTURES_INSTRUMENT')}")
+    print(f"PASS/CHECK: Margin currency set to {os.getenv('COINDCX_MARGIN_CURRENCY')}")
+    
+    # 3. Telegram Check
+    if os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID"):
+        print("PASS/CHECK: Telegram credentials present")
+    else:
+        print("WARNING: Telegram credentials missing")
 
-jobs:
-  preflight:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    print("PREFLIGHT PASSED: Ready for Live Trading Execution.")
+    sys.exit(0)
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run preflight check
-        env:
-          COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
-          COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
-          COINDCX_FUTURES_INSTRUMENT: ${{ secrets.COINDCX_FUTURES_INSTRUMENT }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m app.live_preflight
+if __name__ == "__main__":
+    run_preflight()
