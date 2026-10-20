@@ -57,13 +57,7 @@ def fetch_active_instruments(
 def verify_active_instrument(
     pair: str, margin_currency: str = "INR", *, session: Any = requests
 ) -> dict[str, Any]:
-    """Verify an exact pair using the official margin-filtered active-instruments list.
-
-    CoinDCX's instrument-details endpoint does not consistently echo the requested
-    pair/margin fields. The active-instruments endpoint is already filtered by
-    margin_currency_short_name[]; membership in that exact response is the
-    authoritative check used here. This function remains public/read-only.
-    """
+    """Confirm pair appears in CoinDCX's active futures list for the margin mode."""
     instrument = pair.strip()
     if not instrument.startswith("B-") or "_" not in instrument:
         raise MarketDataNotConfigured("Pair must match the official futures instrument format.")
@@ -72,11 +66,30 @@ def verify_active_instrument(
         raise MarketDataNotConfigured(
             f"{instrument} is not listed as active for {margin_currency} margin."
         )
-    return {
-        "pair": instrument,
-        "margin_currency_short_name": margin_currency,
-        "verified_by": "active_instruments",
-    }
+    try:
+        response = session.get(
+            INSTRUMENT_DETAILS_URL,
+            params={"pair": instrument, "margin_currency_short_name": margin_currency},
+            timeout=TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise MarketDataError(f"CoinDCX instrument-details request failed: {exc}") from exc
+    if not isinstance(payload, dict) or not payload:
+        raise MarketDataError("CoinDCX returned an unexpected instrument-details response.")
+    # Do not treat a non-empty response as proof unless it identifies the requested
+    # instrument and margin currency. If the API schema differs, fail closed and
+    # make the mismatch visible in the paper report.
+    returned_pair = payload.get("pair")
+    returned_margin = payload.get("margin_currency_short_name")
+    if returned_pair != instrument or returned_margin != margin_currency:
+        raise MarketDataError(
+            "CoinDCX instrument-details response did not confirm the requested "
+            f"pair/margin (pair={returned_pair!r}, margin={returned_margin!r})."
+        )
+    return payload
+
 
 def fetch_latest_candles(
     pair: str | None = None,
