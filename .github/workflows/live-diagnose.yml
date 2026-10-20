@@ -13,7 +13,7 @@ jobs:
     env:
       COINDCX_FUTURES_PAIR: B-BTC_USDT
       COINDCX_MARGIN_CURRENCY: INR
-      MARGIN_INR: ${{ vars.MARGIN_INR || '200' }}
+      MARGIN_INR: ${{ vars.MARGIN_INR || '300' }}
       LEVERAGE: ${{ vars.LEVERAGE || '30' }}
       COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
       COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}

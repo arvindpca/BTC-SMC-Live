@@ -41,7 +41,7 @@ Set in **Settings -> Secrets and variables -> Actions**:
 | Secret | `COINDCX_API_KEY`, `COINDCX_API_SECRET` | trade-only key, **withdrawals disabled** |
 | Secret | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | optional alerts |
 | (fixed) | pair | locked to `B-BTC_USDT` in code and workflow; any other pair is refused. Margin is still INR. |
-| Variable | `MARGIN_INR` / `LEVERAGE` | default `200` / `30` (hard caps: 500 / 30) |
+| Variable | `MARGIN_INR` / `LEVERAGE` | default `300` / `30` (hard caps: 500 / 30) |
 | Variable | `LIVE_MODE` | `OFF` (default) -> `DRY_RUN` -> `LIVE` |
 | Variable | `LIVE_CONFIRM` | must equal `YES_TRADE_REAL_MONEY` for `LIVE` |
 

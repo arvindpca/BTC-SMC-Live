@@ -28,7 +28,7 @@ jobs:
       LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM }}
       COINDCX_FUTURES_PAIR: B-BTC_USDT  # locked; the bot refuses any other pair
       COINDCX_MARGIN_CURRENCY: INR
-      MARGIN_INR: ${{ vars.MARGIN_INR || '200' }}
+      MARGIN_INR: ${{ vars.MARGIN_INR || '300' }}
       LEVERAGE: ${{ vars.LEVERAGE || '30' }}
       MAX_TRADES_PER_DAY: ${{ vars.MAX_TRADES_PER_DAY || '3' }}
       COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}

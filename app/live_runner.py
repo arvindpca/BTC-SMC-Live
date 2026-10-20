@@ -72,7 +72,7 @@ def load_config(env: dict[str, str] | None = None) -> LiveConfig:
         raise ConfigError("COINDCX_MARGIN_CURRENCY must be INR")
 
     try:
-        margin = float(get("MARGIN_INR", "200"))
+        margin = float(get("MARGIN_INR", "300"))
         leverage = int(get("LEVERAGE", "30"))
         max_trades = int(get("MAX_TRADES_PER_DAY", "3"))
         age = int(get("MAX_SIGNAL_AGE_BARS", "1"))
