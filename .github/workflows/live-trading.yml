@@ -1,8 +1,8 @@
 name: BTC-SMC Live Trading (CoinDCX INR futures)
 
-# Scheduled Actions are best-effort, not a 24/7 execution guarantee.
-# Keep this workflow in OFF/DRY_RUN for paper validation; do not rely on
-# runner-local state as the authoritative record of an exchange position.
+# SAFETY LOCK: this hosted workflow is intentionally disabled for exchange orders.
+# GitHub Actions schedules are best-effort and are not a 24/7 execution guarantee.
+# Do not remove this lock until all safety blockers have been fixed and reviewed.
 
 on:
   workflow_dispatch:
@@ -21,13 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
-      LIVE_MODE: ${{ vars.LIVE_MODE || secrets.LIVE_MODE || 'OFF' }}
-      LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM || secrets.LIVE_CONFIRM }}
+      LIVE_MODE: OFF
+      LIVE_CONFIRM: ""
       COINDCX_FUTURES_PAIR: B-BTC_USDT
       COINDCX_MARGIN_CURRENCY: INR
-      MARGIN_INR: ${{ vars.MARGIN_INR || secrets.MARGIN_INR || '300' }}
-      LEVERAGE: ${{ vars.LEVERAGE || secrets.LEVERAGE || '30' }}
-      MAX_TRADES_PER_DAY: ${{ vars.MAX_TRADES_PER_DAY || secrets.MAX_TRADES_PER_DAY || '3' }}
+      MARGIN_INR: "300"
+      LEVERAGE: "30"
+      MAX_TRADES_PER_DAY: "3"
       COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
       COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -43,8 +43,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      # The cache action cannot save a path that does not exist. Create it
-      # before restore/run so a state file written by the runner can be cached.
       - name: Prepare state directory
         run: mkdir -p state
       - name: Restore duplicate-signal guard
@@ -53,7 +51,7 @@ jobs:
           path: state
           key: live-state-${{ github.run_id }}
           restore-keys: live-state-
-      - name: Run one trading cycle
+      - name: Run one trading cycle (hard-locked OFF)
         run: python -m app.live_runner
       - name: Save duplicate-signal guard
         if: always()
