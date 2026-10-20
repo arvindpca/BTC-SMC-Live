@@ -321,8 +321,18 @@ def run_manage(monkeypatch, tmp_path, state, candles, exchange):
     lr.save_state(state, tmp_path / "state.json")
     msgs = []
     config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
-    result = run_cycle(config, client=exchange, fetch=lambda **k: candles, state_path=tmp_path / "state.json",
-                       notify=msgs.append, sleep=lambda s: None, now=1_800_000_300)
+    now_seconds = 1_800_000_300
+    # Keep the fixtures recent so these tests exercise position management rather
+    # than correctly tripping the stale-market-data guard.
+    now_ms = now_seconds * 1000
+    fresh_candles = []
+    for i, item in enumerate(candles):
+        c = dict(item)
+        c["timestamp"] = now_ms - (len(candles) - i) * 5 * 60 * 1000
+        fresh_candles.append(c)
+    result = run_cycle(config, client=exchange,
+                       fetch=lambda **k: fresh_candles, state_path=tmp_path / "state.json",
+                       notify=msgs.append, sleep=lambda s: None, now=now_seconds)
     return result, msgs, lr.load_state(tmp_path / "state.json")
 
 
