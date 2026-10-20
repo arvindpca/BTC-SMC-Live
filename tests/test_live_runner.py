@@ -330,11 +330,23 @@ def run_manage(monkeypatch, tmp_path, state, candles, exchange):
         c = dict(item)
         c["timestamp"] = now_ms - (len(candles) - i) * 5 * 60 * 1000
         fresh_candles.append(c)
-    # Keep the entry-candle boundary aligned with the remapped fixture timestamps.
-    # Otherwise every remapped candle appears to be after entry and the first candle
-    # can incorrectly trigger a trailing-stop milestone.
+    # Preserve which fixture candle is the entry candle while remapping timestamps.
+    # If no fixture represents the entry candle, place entry one interval before the first.
     if fresh_candles and state.get("open_trade"):
-        state["open_trade"]["entry_bar_time"] = fresh_candles[0]["timestamp"]
+        original_entry_time = int(state["open_trade"]["entry_bar_time"])
+        matching_index = next(
+            (i for i, item in enumerate(candles)
+             if int(item["timestamp"]) == original_entry_time),
+            None,
+        )
+        if matching_index is None:
+            state["open_trade"]["entry_bar_time"] = (
+                int(fresh_candles[0]["timestamp"]) - 5 * 60 * 1000
+            )
+        else:
+            state["open_trade"]["entry_bar_time"] = int(
+                fresh_candles[matching_index]["timestamp"]
+            )
         lr.save_state(state, tmp_path / "state.json")
     result = run_cycle(config, client=exchange,
                        fetch=lambda **k: fresh_candles, state_path=tmp_path / "state.json",
