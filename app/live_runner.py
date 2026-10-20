@@ -282,6 +282,21 @@ def run_cycle(
     now_ts = time.time() if now is None else now
     c5 = fetch(pair=config.pair, limit=500, now_seconds=int(now_ts), resolution="5")
     c1 = fetch(pair=config.pair, limit=120, now_seconds=int(now_ts), resolution="60")
+
+    # Defensive freshness check: candle timestamps are UTC epoch milliseconds and
+    # refer to candle OPEN. The last completed candle must not be excessively old.
+    # Empty data is also blocked; it must never be interpreted as a no-signal scan.
+    if not c5 or not c1:
+        notify("BTC SMC: market data missing for 5m or 1h timeframe; cycle blocked.")
+        return {"status": "STALE_OR_MISSING_DATA", "orders_submitted": 0}
+    now_ms = int(now_ts * 1000)
+    latest_5m_close_ms = int(c5[-1]["timestamp"]) + 5 * 60 * 1000
+    latest_1h_close_ms = int(c1[-1]["timestamp"]) + 60 * 60 * 1000
+    # Allow one interval of delivery delay after candle close, but not older data.
+    if (now_ms - latest_5m_close_ms > 10 * 60 * 1000
+            or now_ms - latest_1h_close_ms > 60 * 60 * 1000):
+        notify("BTC SMC: stale 5m/1h candles detected; cycle blocked before signal evaluation.")
+        return {"status": "STALE_OR_MISSING_DATA", "orders_submitted": 0}
     if config.mode == "LIVE":
         # Reconcile exchange position before scanning for a new entry. If exchange has
         # an open position but local state is missing, never open another position.
