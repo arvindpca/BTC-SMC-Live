@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 
 from app.config import check_paper_only
-from app.market_data import MarketDataError, MarketDataNotConfigured, fetch_latest_candles
+from app.market_data import (MarketDataError, MarketDataNotConfigured, fetch_latest_candles, verify_active_instrument)
 from app.reporting import write_report
 from app.strategy_live import analyze, format_scan_report, latest_signal
 
@@ -28,6 +28,7 @@ def run_cycle(data_dir: str = "data") -> int:
         return 0
 
     try:
+        verify_active_instrument(pair, margin_currency="INR")
         candles_5m = fetch_latest_candles(pair=pair, limit=150, resolution="5")
         candles_1h = fetch_latest_candles(pair=pair, limit=100, resolution="60")
         signals, info = analyze(candles_5m, candles_1h)
@@ -43,6 +44,7 @@ def run_cycle(data_dir: str = "data") -> int:
 
     detail = [
         f"instrument={pair}",
+        "instrument_verified_active_for_INR_margin=YES",
         f"completed_5m_candles={len(candles_5m)}",
         f"completed_1h_candles={len(candles_1h)}",
         f"signals_in_lookback={len(signals)}",
