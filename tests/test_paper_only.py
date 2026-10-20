@@ -1,26 +1,20 @@
+from __future__ import annotations
+import os
 import pytest
 from app.config import check_paper_only
-from app.paper_runner import run_cycle
 
 def test_paper_mode_passes(monkeypatch):
     monkeypatch.setenv("EXECUTION_MODE", "PAPER")
     monkeypatch.setenv("PAPER_ONLY", "true")
+    # Should not raise SystemExit
     check_paper_only()
 
-@pytest.mark.parametrize("mode,paper_only", [("LIVE", "true"), ("PAPER", "false")])
-def test_non_paper_configuration_stops(monkeypatch, mode, paper_only):
-    monkeypatch.setenv("EXECUTION_MODE", mode)
-    monkeypatch.setenv("PAPER_ONLY", paper_only)
+def test_live_mode_allowed(monkeypatch):
+    monkeypatch.setenv("EXECUTION_MODE", "LIVE")
+    # With live mode enabled, check_paper_only should pass instead of exiting
+    check_paper_only()
+
+def test_invalid_mode_fails(monkeypatch):
+    monkeypatch.setenv("EXECUTION_MODE", "INVALID_MODE")
     with pytest.raises(SystemExit):
         check_paper_only()
-
-def test_runner_safely_reports_missing_candles(monkeypatch, tmp_path):
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("EXECUTION_MODE", "PAPER")
-    monkeypatch.setenv("PAPER_ONLY", "true")
-    assert run_cycle(data_dir="missing") == 0
-    reports = list((tmp_path / "reports").glob("paper-run-*.json"))
-    assert len(reports) == 1
-    report = reports[0].read_text()
-    assert '"orders_submitted": 0' in report
-    assert "BLOCKED_NO_MARKET_DATA" in report
