@@ -282,11 +282,26 @@ def run_cycle(
     now_ts = time.time() if now is None else now
     c5 = fetch(pair=config.pair, limit=500, now_seconds=int(now_ts), resolution="5")
     c1 = fetch(pair=config.pair, limit=120, now_seconds=int(now_ts), resolution="60")
-    if config.mode == "LIVE" and load_state(state_path).get("open_trade"):
+    if config.mode == "LIVE":
+        # Reconcile exchange position before scanning for a new entry. If exchange has
+        # an open position but local state is missing, never open another position.
         client = client or FuturesClient(config.api_key, config.api_secret)
-        managed = manage_open_trade(config, client, c5, state_path, notify)
-        if managed["status"] != "TRADE_CLOSED":
-            return managed
+        local_state = load_state(state_path)
+        try:
+            exchange_position = client.open_position(config.pair)
+        except CoinDCXError as exc:
+            notify(f"BTC SMC LIVE: position reconciliation failed; new entry blocked ({type(exc).__name__}).")
+            return {"status": "POSITION_CHECK_FAILED", "orders_submitted": 0}
+        if exchange_position is not None and not local_state.get("open_trade"):
+            notify(
+                "BTC SMC LIVE: exchange position exists but local trade state is missing. "
+                "No new entry will be sent. Verify the position and its SL/TP manually on CoinDCX."
+            )
+            return {"status": "ORPHAN_POSITION_MANUAL_REVIEW", "orders_submitted": 0}
+        if local_state.get("open_trade"):
+            managed = manage_open_trade(config, client, c5, state_path, notify)
+            if managed["status"] != "TRADE_CLOSED":
+                return managed
     try:  # the report is diagnostics only; it must never break trading
         print(format_scan_report(analyze(c5, c1)[1]))
     except Exception as exc:  # noqa: BLE001
