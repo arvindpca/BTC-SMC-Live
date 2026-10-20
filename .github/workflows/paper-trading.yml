@@ -3,8 +3,8 @@ name: BTC-SMC Paper Trading
 on:
   workflow_dispatch:
   schedule:
-    # UTC schedule; can be delayed by GitHub. Not a 24/7 guarantee.
-    - cron: "*/15 * * * *"
+    # UTC schedule; GitHub may delay or skip scheduled runs.
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: read
