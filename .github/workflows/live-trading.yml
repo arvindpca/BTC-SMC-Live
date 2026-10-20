@@ -24,13 +24,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
-      LIVE_MODE: ${{ vars.LIVE_MODE || 'OFF' }}
-      LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM }}
+      LIVE_MODE: ${{ vars.LIVE_MODE || secrets.LIVE_MODE || 'OFF' }}
+      LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM || secrets.LIVE_CONFIRM }}
       COINDCX_FUTURES_PAIR: B-BTC_USDT  # locked; the bot refuses any other pair
       COINDCX_MARGIN_CURRENCY: INR
-      MARGIN_INR: ${{ vars.MARGIN_INR || '300' }}
-      LEVERAGE: ${{ vars.LEVERAGE || '30' }}
-      MAX_TRADES_PER_DAY: ${{ vars.MAX_TRADES_PER_DAY || '3' }}
+      MARGIN_INR: ${{ vars.MARGIN_INR || secrets.MARGIN_INR || '300' }}
+      LEVERAGE: ${{ vars.LEVERAGE || secrets.LEVERAGE || '30' }}
+      MAX_TRADES_PER_DAY: ${{ vars.MAX_TRADES_PER_DAY || secrets.MAX_TRADES_PER_DAY || '3' }}
       COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
       COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
