@@ -12,7 +12,7 @@ This repository is **not approved for live trading**. A green CI run only verifi
 
 1. **Position recovery:** `app/live_runner.py` only manages an open trade when local state contains `open_trade`. Exchange positions must be reconciled with durable state before any new signal is considered.
 2. **Cache is not a durable ledger:** GitHub Actions cache is best-effort and not a transactional position database; it cannot guarantee at-most-once order execution.
-3. **Order timeout reconciliation:** A network/API error after order submission can leave the outcome unknown. Reconcile by exchange order/position identifiers; never assume rejection from a timeout.
+3. **Order timeout reconciliation:** The runner now labels submission errors as `ORDER_OUTCOME_UNKNOWN`, keeps the pre-submission duplicate guard, and alerts the operator to inspect CoinDCX manually; it does not yet reconcile using exchange order IDs. Never assume rejection from a timeout.
 4. **Protective-order confirmation:** Independently verify exchange-side SL and TP after placement and every modification. Missing fields or failed verification must mean unverified.
 5. **Freshness checks:** Reject stale 5-minute and hourly candles before signal evaluation.
 6. **Instrument and sizing:** Verify current instrument metadata, quantity step/minimum, margin currency, leverage mode, and TP/SL endpoint semantics using read-only/paper tests.
