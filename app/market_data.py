@@ -78,6 +78,16 @@ def verify_active_instrument(
         raise MarketDataError(f"CoinDCX instrument-details request failed: {exc}") from exc
     if not isinstance(payload, dict) or not payload:
         raise MarketDataError("CoinDCX returned an unexpected instrument-details response.")
+    # Do not treat a non-empty response as proof unless it identifies the requested
+    # instrument and margin currency. If the API schema differs, fail closed and
+    # make the mismatch visible in the paper report.
+    returned_pair = payload.get("pair")
+    returned_margin = payload.get("margin_currency_short_name")
+    if returned_pair != instrument or returned_margin != margin_currency:
+        raise MarketDataError(
+            "CoinDCX instrument-details response did not confirm the requested "
+            f"pair/margin (pair={returned_pair!r}, margin={returned_margin!r})."
+        )
     return payload
 
 
