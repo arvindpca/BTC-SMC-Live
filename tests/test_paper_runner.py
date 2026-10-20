@@ -8,6 +8,7 @@ def test_cycle_reports_fresh_signal_without_submitting_orders(monkeypatch, tmp_p
     monkeypatch.setenv("PAPER_ONLY", "true")
     monkeypatch.setenv("EXECUTION_MODE", "PAPER")
     monkeypatch.setenv("COINDCX_FUTURES_PAIR", "B-BTC_USDT")
+    monkeypatch.setattr(runner, "verify_active_instrument", lambda *a, **k: {"pair": "B-BTC_USDT"})
     monkeypatch.setattr(runner, "fetch_latest_candles", lambda **kwargs: [
         {"timestamp": 1_800_000_000_000, "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1}
     ])
@@ -54,6 +55,7 @@ def test_cycle_fails_closed_on_market_data_error(monkeypatch, tmp_path):
     def fail(**kwargs):
         raise MarketDataError("test network failure")
 
+    monkeypatch.setattr(runner, "verify_active_instrument", lambda *a, **k: {"pair": "B-BTC_USDT"})
     monkeypatch.setattr(runner, "fetch_latest_candles", fail)
     assert runner.run_cycle() == 0
     body = next((tmp_path / "reports").glob("*.json")).read_text(encoding="utf-8")
