@@ -5,7 +5,6 @@ not create virtual fills, call authenticated endpoints, or submit exchange order
 """
 from __future__ import annotations
 
-import json
 import os
 
 from app.config import check_paper_only
@@ -21,9 +20,9 @@ def run_cycle(data_dir: str = "data") -> int:
     pair = os.getenv("COINDCX_FUTURES_PAIR", "").strip()
     if not pair:
         report = write_report(
-            "BLOCKED_NO_INSTRUMENT",
-            "Set COINDCX_FUTURES_PAIR to an exact verified CoinDCX futures pair. "
-            "No candles evaluated; no orders submitted.",
+            "BLOCKED_NO_MARKET_DATA",
+            "COINDCX_FUTURES_PAIR is not configured. Set it to an exact verified "
+            "CoinDCX futures pair. No candles evaluated; no orders submitted.",
         )
         print(f"Paper scan blocked safely; report={report}; orders_submitted=0")
         return 0
