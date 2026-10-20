@@ -9,9 +9,16 @@ def test_cycle_reports_fresh_signal_without_submitting_orders(monkeypatch, tmp_p
     monkeypatch.setenv("EXECUTION_MODE", "PAPER")
     monkeypatch.setenv("COINDCX_FUTURES_PAIR", "B-BTC_USDT")
     monkeypatch.setattr(runner, "verify_active_instrument", lambda *a, **k: {"pair": "B-BTC_USDT"})
-    monkeypatch.setattr(runner, "fetch_latest_candles", lambda **kwargs: [
-        {"timestamp": 1_800_000_000_000, "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1}
-    ])
+    def fake_candles(**kwargs):
+        count = 25 if kwargs.get("resolution") == "5" else 10
+        interval_ms = 300_000 if kwargs.get("resolution") == "5" else 3_600_000
+        return [
+            {"timestamp": 1_800_000_000_000 + i * interval_ms,
+             "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1}
+            for i in range(count)
+        ]
+
+    monkeypatch.setattr(runner, "fetch_latest_candles", fake_candles)
     monkeypatch.setattr(runner, "analyze", lambda c5, h1: ([], {
         "candles_5m": 1, "first_bar_time": 1, "last_bar_time": 1, "last_close": 100,
         "h1_closed": 1, "last_h1_time": 1, "bias": "NEUTRAL", "swing_high": None,
