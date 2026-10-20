@@ -20,7 +20,10 @@ FAILED: list[str] = []
 def step(name, fn):
     try:
         out = fn()
-        print(f"PASS  {name}" + (f" -> {out}" if out is not None else ""))
+        shown = out
+        if isinstance(out, list) and out and isinstance(out[0], dict) and "close" in out[0]:
+            shown = f"{len(out)} candles, last close {out[-1]['close']} at {out[-1]['timestamp']}"
+        print(f"PASS  {name}" + (f" -> {shown}" if shown is not None else ""))
         return out
     except Exception as exc:  # noqa: BLE001 - diagnostic must continue
         FAILED.append(name)

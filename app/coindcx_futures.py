@@ -109,15 +109,29 @@ class FuturesClient:
         raise CoinDCXError("Could not read a sane USDTINR rate")
 
     # ---- account ---------------------------------------------------------
-    def list_positions(self) -> list[dict[str, Any]]:
-        # UNVERIFIED: margin_currency_short_name filter (needed to see INR positions).
-        body = {"page": "1", "size": "50", "margin_currency_short_name": [self.margin_currency]}
+    POSITIONS_PAGE_SIZE = 50
+    POSITIONS_MAX_PAGES = 6
+
+    def _positions_page(self, page: int) -> list[dict[str, Any]]:
+        # UNVERIFIED-but-working (diagnose passed): margin_currency_short_name filter for INR positions.
+        body = {"page": str(page), "size": str(self.POSITIONS_PAGE_SIZE),
+                "margin_currency_short_name": [self.margin_currency]}
         data = self._signed_post(f"{FUTURES_PREFIX}/positions", body)
         if isinstance(data, dict):
             data = data.get("positions", data.get("data"))
         if not isinstance(data, list):
             raise CoinDCXError("Unexpected positions response")
         return [p for p in data if isinstance(p, dict)]
+
+    def list_positions(self) -> list[dict[str, Any]]:
+        """All position rows, following pages until a short page (bounded)."""
+        rows: list[dict[str, Any]] = []
+        for page in range(1, self.POSITIONS_MAX_PAGES + 1):
+            batch = self._positions_page(page)
+            rows.extend(batch)
+            if len(batch) < self.POSITIONS_PAGE_SIZE:
+                break
+        return rows
 
     def open_position(self, pair: str) -> dict[str, Any] | None:
         for position in self.list_positions():
