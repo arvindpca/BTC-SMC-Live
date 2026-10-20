@@ -1,6 +1,6 @@
 # BTC-SMC-Live
 
-**Status: validation + paper-trading scaffold only. Live order placement is not implemented or enabled.**
+**Status: paper scaffold + gated LIVE executor (OFF by default). No order can be sent until you set `LIVE_MODE` yourself.**
 
 Private repository for an isolated CoinDCX INR-futures SMC research workflow. This project is deliberately separate from any existing bot.
 
@@ -29,3 +29,26 @@ This scaffold does not yet claim a verified BTC INR-futures symbol, market-data 
 ## Risk note
 
 Leveraged futures can lose money quickly. Paper results do not guarantee live execution or returns. Python-only exits may fail when the worker is unavailable; any future live design needs exchange-side protective-order validation and explicit fail-safe handling.
+
+## Live trading (CoinDCX INR futures) - staged, OFF by default
+
+Workflow: `.github/workflows/live-trading.yml` (every 5 min, best-effort). Code: `app/live_runner.py`, `app/strategy_live.py`, `app/coindcx_futures.py`.
+
+Set in **Settings -> Secrets and variables -> Actions**:
+
+| Type | Name | Value |
+|---|---|---|
+| Secret | `COINDCX_API_KEY`, `COINDCX_API_SECRET` | trade-only key, **withdrawals disabled** |
+| Secret | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | optional alerts |
+| (fixed) | pair | locked to `B-BTC_USDT` in code and workflow; any other pair is refused. Margin is still INR. |
+| Variable | `MARGIN_INR` / `LEVERAGE` | default `200` / `30` (hard caps: 500 / 30) |
+| Variable | `LIVE_MODE` | `OFF` (default) -> `DRY_RUN` -> `LIVE` |
+| Variable | `LIVE_CONFIRM` | must equal `YES_TRADE_REAL_MONEY` for `LIVE` |
+
+Stages: 1) `DRY_RUN` for a few days: real data + real signals + read-only exchange calls, logs the exact order it would send. 2) `LIVE` only after the dry-run Telegram/log output looks right; first live trade should be the smallest size the exchange allows. Set `LIVE_MODE=OFF` to stop new entries (open positions keep their exchange-side SL/TP).
+
+Risk filter: the paper bot's 0.05%-2.5% risk filter is removed. Only a technical guard remains: a signal whose stop is wider than about 90% of the liquidation distance (3% at 30x) is skipped, because that stop could never trigger.
+
+Behaviour: market entry on the closed 5m rejection candle, exchange-side stop-loss at the sweep extreme and take-profit at 4R. If SL/TP cannot be placed or verified, or the fill is far from plan, the position is closed immediately. One position at a time (checked on the exchange), max 3 trades/day, each signal is traded at most once. The paper bot's trailing is ported: when completed 5m candles after entry reach 2R the exchange SL is moved to 2R, at 3R to 3R, and 4R is the exchange take-profit (one position, no partial exits). Because the job runs every ~5 minutes, a stop move can be up to one candle late; if the SL move fails the original SL stays active and you get an alert. Moving an existing SL through CoinDCX's TP/SL endpoint is unverified - watch the first live trade.
+
+Unverified against live CoinDCX (check during DRY_RUN / first tiny LIVE trade): the INR-margin fields (`margin_currency_short_name`, `position_margin_type`) and the `stop_loss_trigger` field used to verify protection. Minimum order size can exceed Rs200 x 30 on BTC; the bot then blocks the trade and tells you the margin it would need.

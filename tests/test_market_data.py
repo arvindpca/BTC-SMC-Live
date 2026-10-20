@@ -100,3 +100,22 @@ def test_limit_must_be_in_range():
             pair="B-BTC_USDT", limit=1, now_seconds=BASE,
             session=FakeSession({"s": "ok", "data": []}),
         )
+
+
+def test_hourly_resolution_uses_hourly_closing_rule():
+    hour = 3600
+    base = BASE - (BASE % hour)
+    session = FakeSession({"s": "ok", "data": [candle(base - 2 * hour), candle(base - hour), candle(base)]})
+    rows = fetch_latest_candles(
+        pair="B-BTC_USDT", limit=10, now_seconds=base + 1800, resolution="60", session=session
+    )
+    assert [r["timestamp"] for r in rows] == [(base - 2 * hour) * 1000, (base - hour) * 1000]
+    assert session.calls[0][1]["resolution"] == "60"
+
+
+def test_unknown_resolution_rejected():
+    with pytest.raises(ValueError):
+        fetch_latest_candles(
+            pair="B-BTC_USDT", now_seconds=BASE, resolution="15",
+            session=FakeSession({"s": "ok", "data": []}),
+        )
