@@ -32,6 +32,18 @@ def run_cycle(data_dir: str = "data") -> int:
         candles_5m = fetch_latest_candles(pair=pair, limit=150, resolution="5")
         candles_1h = fetch_latest_candles(pair=pair, limit=100, resolution="60")
         signals, info = analyze(candles_5m, candles_1h)
+        if len(candles_5m) < 20 or len(candles_1h) < 8:
+            detail = (
+                f"instrument={pair}\n"
+                f"completed_5m_candles={len(candles_5m)}\n"
+                f"completed_1h_candles={len(candles_1h)}\n"
+                f"minimum_required_5m=20\nminimum_required_1h=8\n"
+                f"{format_scan_report(info)}\n"
+                "No signal accepted; no orders submitted."
+            )
+            report = write_report("BLOCKED_INSUFFICIENT_DATA", detail)
+            print(f"Paper scan blocked for insufficient history; report={report}; orders_submitted=0")
+            return 0
         fresh = latest_signal(candles_5m, candles_1h, max_age_bars=0)
     except (MarketDataError, MarketDataNotConfigured, ValueError, KeyError) as exc:
         report = write_report(
