@@ -89,3 +89,31 @@ def test_usdt_inr_rate_sanity_band():
     bad = Session([{"market": "USDTINR", "last_price": "0.5"}])
     with pytest.raises(CoinDCXError):
         FuturesClient("k", "s", session=bad).usdt_inr_rate()
+
+
+class PagedSession(Session):
+    """Returns full pages for page 1..N-1 and a short last page."""
+    def __init__(self, pages):
+        super().__init__(None)
+        self.pages = pages
+
+    def post(self, url, *, data, headers, timeout):
+        page = int(json.loads(data)["page"])
+        self.posts.append((url, data, headers))
+        return Resp(self.pages[page - 1] if page <= len(self.pages) else [])
+
+
+def test_open_position_found_on_second_page():
+    flat = [{"pair": "B-BTC_USDT", "active_pos": 0, "id": f"old{i}"} for i in range(50)]
+    session = PagedSession([flat, [{"pair": "B-BTC_USDT", "active_pos": 0.001, "id": "live1"}]])
+    client = FuturesClient("k", "s", session=session)
+    assert client.open_position("B-BTC_USDT")["id"] == "live1"
+    assert len(session.posts) == 2
+
+
+def test_paging_is_bounded():
+    full = [{"pair": "B-ETH_USDT", "active_pos": 0, "id": str(i)} for i in range(50)]
+    session = PagedSession([full] * 20)
+    client = FuturesClient("k", "s", session=session)
+    assert client.open_position("B-BTC_USDT") is None
+    assert len(session.posts) == FuturesClient.POSITIONS_MAX_PAGES
