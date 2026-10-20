@@ -259,6 +259,18 @@ def run_cycle(
         return {"status": "PRETRADE_FAILED", "orders_submitted": 0, "error": str(exc)}
 
     side = "buy" if signal.side == "LONG" else "sell"
+    # Technical guard (not a strategy filter): with isolated margin the position is liquidated
+    # at roughly 100/leverage % against you, so a stop wider than that can never trigger.
+    liq_limit = 90.0 / config.leverage
+    if signal.risk_pct >= liq_limit:
+        notify(
+            f"BTC SMC LIVE: signal skipped - stop is {signal.risk_pct:.2f}% away but {config.leverage}x "
+            f"liquidates at about {100.0 / config.leverage:.2f}%, so the stop could never trigger.\n"
+            f"{signal.side} ref entry {signal.entry:.2f} | SL {signal.stop:.2f}"
+        )
+        state["last_signal_bar_time"] = signal.bar_time
+        save_state(state, state_path)
+        return {"status": "SKIPPED_STOP_BEYOND_LIQUIDATION", "orders_submitted": 0}
     summary = (
         f"{signal.side} {config.pair}\nSignal candle: {datetime.fromtimestamp(signal.bar_time/1000, timezone.utc).isoformat()}\n"
         f"Ref entry {signal.entry:.2f} | SL {signal.stop:.2f} | TP(4R) {signal.target:.2f} | risk {signal.risk_pct:.2f}%"

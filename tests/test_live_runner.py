@@ -277,3 +277,20 @@ def test_pair_defaults_to_btc_usdt_and_is_locked():
     with pytest.raises(ConfigError):
         run_cycle(replace(cfg(LIVE_MODE="DRY_RUN"), pair="B-ETH_USDT"), client=object(),
                   fetch=lambda **k: [], notify=lambda m: None)
+
+
+def test_stop_beyond_liquidation_is_skipped_not_traded(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    wide = make_signal("LONG", 100_000, 95_000)  # 5% stop; 30x liquidates near 3.3%
+    result, msgs = run(monkeypatch, tmp_path, config, ex, wide)
+    assert result["status"] == "SKIPPED_STOP_BEYOND_LIQUIDATION" and ex.calls == []
+    assert "liquidates" in msgs[0]
+
+
+def test_wide_but_inside_liquidation_stop_is_traded(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN, fill=100_000.0)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    sig = make_signal("LONG", 100_000, 97_500)  # 2.5%: above the old filter's edge region, below liquidation
+    result, _ = run(monkeypatch, tmp_path, config, ex, sig)
+    assert result["status"] == "ORDER_PLACED_PROTECTED"

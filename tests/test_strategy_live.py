@@ -2,12 +2,7 @@ import random
 
 import pytest
 
-from app.strategy_live import (
-    MAX_RISK_PERCENT,
-    MIN_RISK_PERCENT,
-    latest_signal,
-    scan_signals,
-)
+from app.strategy_live import latest_signal, scan_signals
 
 T0 = 1_800_000_000_000 - (1_800_000_000_000 % 3_600_000)
 
@@ -48,10 +43,10 @@ def test_known_seed_produces_signals():
     assert len(FULL) >= 5
 
 
-def test_signal_geometry_and_risk_limits():
+def test_signal_geometry():
     for s in FULL:
         risk = abs(s.entry - s.stop)
-        assert MIN_RISK_PERCENT <= s.risk_pct <= MAX_RISK_PERCENT
+        assert s.risk_pct > 0  # no min/max risk filter any more
         if s.side == "LONG":
             assert s.stop < s.entry < s.target
             assert s.target == pytest.approx(s.entry + 4 * risk)

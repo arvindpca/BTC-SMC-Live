@@ -26,8 +26,6 @@ from typing import Any
 SWING_LENGTH = 3
 SETUP_EXPIRY = 18
 FVG_EXPIRY = 12
-MIN_RISK_PERCENT = 0.05
-MAX_RISK_PERCENT = 2.50
 TARGET_RR = 4
 CANDLE_5M_MS = 5 * 60 * 1000
 CANDLE_1H_MS = 60 * 60 * 1000
@@ -177,8 +175,8 @@ def scan_signals(
                         risk = abs(entry - stop)
                         risk_pct = risk / entry * 100
                         valid_direction = stop < entry if is_long else stop > entry
-                        valid_risk = MIN_RISK_PERCENT <= risk_pct <= MAX_RISK_PERCENT
-                        if valid_direction and valid_risk:
+                        # No min/max risk-% filter (removed on request); only the stop must be on the correct side.
+                        if valid_direction:
                             target = entry + TARGET_RR * risk if is_long else entry - TARGET_RR * risk
                             signals.append(
                                 Signal(

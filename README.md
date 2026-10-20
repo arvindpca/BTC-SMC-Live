@@ -47,6 +47,8 @@ Set in **Settings -> Secrets and variables -> Actions**:
 
 Stages: 1) `DRY_RUN` for a few days: real data + real signals + read-only exchange calls, logs the exact order it would send. 2) `LIVE` only after the dry-run Telegram/log output looks right; first live trade should be the smallest size the exchange allows. Set `LIVE_MODE=OFF` to stop new entries (open positions keep their exchange-side SL/TP).
 
+Risk filter: the paper bot's 0.05%-2.5% risk filter is removed. Only a technical guard remains: a signal whose stop is wider than about 90% of the liquidation distance (3% at 30x) is skipped, because that stop could never trigger.
+
 Behaviour: market entry on the closed 5m rejection candle, exchange-side stop-loss at the sweep extreme and take-profit at 4R. If SL/TP cannot be placed or verified, or the fill is far from plan, the position is closed immediately. One position at a time (checked on the exchange), max 3 trades/day, each signal is traded at most once. The 2R/3R trailing stop of the paper bot is **not** ported: a 5-minute GitHub job cannot move stops in time.
 
 Unverified against live CoinDCX (check during DRY_RUN / first tiny LIVE trade): the INR-margin fields (`margin_currency_short_name`, `position_margin_type`) and the `stop_loss_trigger` field used to verify protection. Minimum order size can exceed Rs200 x 30 on BTC; the bot then blocks the trade and tells you the margin it would need.
