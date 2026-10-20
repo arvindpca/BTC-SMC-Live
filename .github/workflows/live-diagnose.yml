@@ -1,0 +1,31 @@
+name: BTC-SMC Live Diagnose (read-only, no orders)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      COINDCX_FUTURES_PAIR: B-BTC_USDT
+      COINDCX_MARGIN_CURRENCY: INR
+      MARGIN_INR: ${{ vars.MARGIN_INR || '200' }}
+      LEVERAGE: ${{ vars.LEVERAGE || '30' }}
+      COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
+      COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Read-only diagnosis against the real CoinDCX API
+        run: python -m app.live_diagnose
