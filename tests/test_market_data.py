@@ -119,3 +119,46 @@ def test_unknown_resolution_rejected():
             pair="B-BTC_USDT", now_seconds=BASE, resolution="15",
             session=FakeSession({"s": "ok", "data": []}),
         )
+
+
+
+def test_active_instruments_uses_official_inr_query():
+    from app.market_data import fetch_active_instruments
+
+    session = FakeSession(["B-BTC_USDT", "B-ETH_USDT"])
+    assert fetch_active_instruments("INR", session=session) == ["B-BTC_USDT", "B-ETH_USDT"]
+    url, params, timeout = session.calls[0]
+    assert url.endswith("/active_instruments")
+    assert params == {"margin_currency_short_name[]": "INR"}
+    assert timeout > 0
+
+
+def test_verify_active_instrument_checks_list_and_details():
+    from app.market_data import verify_active_instrument
+
+    class MultiResponseSession:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, url, *, params, timeout):
+            self.calls.append((url, params, timeout))
+            if url.endswith("/active_instruments"):
+                return FakeResponse(["B-BTC_USDT"])
+            return FakeResponse({"pair": "B-BTC_USDT", "margin_currency_short_name": "INR"})
+
+    session = MultiResponseSession()
+    details = verify_active_instrument("B-BTC_USDT", "INR", session=session)
+    assert details["pair"] == "B-BTC_USDT"
+    assert len(session.calls) == 2
+    assert session.calls[1][1] == {
+        "pair": "B-BTC_USDT", "margin_currency_short_name": "INR"
+    }
+
+
+def test_verify_active_instrument_rejects_pair_not_in_inr_list():
+    from app.market_data import verify_active_instrument
+
+    with pytest.raises(MarketDataNotConfigured, match="not listed as active"):
+        verify_active_instrument(
+            "B-BTC_USDT", "INR", session=FakeSession(["B-ETH_USDT"])
+        )
