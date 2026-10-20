@@ -380,8 +380,18 @@ def run_cycle(
     try:
         client.create_market_order(pair=config.pair, side=side, quantity=qty, leverage=config.leverage)
     except CoinDCXError as exc:
-        notify(f"BTC SMC LIVE: ORDER REJECTED, nothing opened. {exc}\n{summary}")
-        return {"status": "ORDER_REJECTED", "orders_submitted": 1, "error": str(exc)}
+        # A transport/API error can happen after the exchange accepted the order.
+        # The signal marker was persisted before submission, so never retry blindly.
+        notify(
+            "BTC SMC LIVE: ORDER OUTCOME UNKNOWN. Do not retry automatically. "
+            "Check CoinDCX orders and positions manually before any further action. "
+            f"Error type: {type(exc).__name__}.\n{summary}"
+        )
+        return {
+            "status": "ORDER_OUTCOME_UNKNOWN",
+            "orders_submitted": 1,
+            "error_type": type(exc).__name__,
+        }
 
     position = _wait_for_position(client, config.pair, sleep)
     if position is None:
