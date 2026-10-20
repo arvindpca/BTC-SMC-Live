@@ -39,7 +39,7 @@ def test_cycle_blocks_without_pair(monkeypatch, tmp_path):
 
     assert runner.run_cycle() == 0
     body = next((tmp_path / "reports").glob("*.json")).read_text(encoding="utf-8")
-    assert "BLOCKED_NO_INSTRUMENT" in body
+    assert "BLOCKED_NO_MARKET_DATA" in body
     assert '"orders_submitted": 0' in body
 
 
