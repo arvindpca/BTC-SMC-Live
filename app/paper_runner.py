@@ -1,23 +1,87 @@
-"""One bounded, no-network paper cycle. Never submits exchange orders."""
+"""Read-only, paper-only SMC scan cycle.
+
+Fetches completed public candles and reports the latest signal candidate. It does
+not create virtual fills, call authenticated endpoints, or submit exchange orders.
+"""
 from __future__ import annotations
 
+import os
+
 from app.config import check_paper_only
+from app.market_data import (MarketDataError, MarketDataNotConfigured, fetch_latest_candles, verify_active_instrument)
 from app.reporting import write_report
+from app.strategy_live import analyze, format_scan_report, latest_signal
 
 
 def run_cycle(data_dir: str = "data") -> int:
-    """Fail closed until a verified market-data adapter and causal strategy exist.
-
-    data_dir is accepted for compatibility with the offline fixture test. This
-    runner deliberately does not read files or call an exchange yet.
-    """
+    # data_dir retained for backwards compatibility with existing callers.
+    del data_dir
     check_paper_only()
-    report = write_report(
-        "BLOCKED_NO_MARKET_DATA",
-        "No market-data adapter is configured and the SMC strategy has not passed "
-        "causal/look-ahead validation. No candles evaluated; no orders submitted.",
-    )
-    print(f"Paper cycle blocked safely; report={report}; orders_submitted=0")
+    pair = os.getenv("COINDCX_FUTURES_PAIR", "").strip()
+    if not pair:
+        report = write_report(
+            "BLOCKED_NO_MARKET_DATA",
+            "COINDCX_FUTURES_PAIR is not configured. Set it to an exact verified "
+            "CoinDCX futures pair. No candles evaluated; no orders submitted.",
+        )
+        print(f"Paper scan blocked safely; report={report}; orders_submitted=0")
+        return 0
+
+    try:
+        verify_active_instrument(pair, margin_currency="INR")
+        candles_5m = fetch_latest_candles(pair=pair, limit=150, resolution="5")
+        candles_1h = fetch_latest_candles(pair=pair, limit=100, resolution="60")
+        signals, info = analyze(candles_5m, candles_1h)
+        if len(candles_5m) < 20 or len(candles_1h) < 8:
+            detail = (
+                f"instrument={pair}\n"
+                f"completed_5m_candles={len(candles_5m)}\n"
+                f"completed_1h_candles={len(candles_1h)}\n"
+                f"minimum_required_5m=20\nminimum_required_1h=8\n"
+                f"{format_scan_report(info)}\n"
+                "No signal accepted; no orders submitted."
+            )
+            report = write_report("BLOCKED_INSUFFICIENT_DATA", detail)
+            print(f"Paper scan blocked for insufficient history; report={report}; orders_submitted=0")
+            return 0
+        fresh = latest_signal(candles_5m, candles_1h, max_age_bars=0)
+    except (MarketDataError, MarketDataNotConfigured, ValueError, KeyError) as exc:
+        report = write_report(
+            "BLOCKED_MARKET_DATA",
+            f"Read-only candle/strategy validation failed: {type(exc).__name__}: {exc}. "
+            "No signal accepted; no orders submitted.",
+        )
+        print(f"Paper scan blocked safely; report={report}; orders_submitted=0")
+        return 0
+
+    detail = [
+        f"instrument={pair}",
+        "instrument_verified_active_for_INR_margin=YES",
+        f"completed_5m_candles={len(candles_5m)}",
+        f"completed_1h_candles={len(candles_1h)}",
+        f"signals_in_lookback={len(signals)}",
+        format_scan_report(info),
+    ]
+    if fresh is not None:
+        detail.extend([
+            "fresh_signal_candidate=YES",
+            f"side={fresh.side}",
+            f"signal_bar_time_ms={fresh.bar_time}",
+            f"reference_entry={fresh.entry}",
+            f"stop_loss_reference={fresh.stop}",
+            f"take_profit_reference_4R={fresh.target}",
+            f"risk_pct={fresh.risk_pct:.6f}",
+            "note=signal candidate only; no virtual fill or exchange order",
+        ])
+        status = "SIGNAL_CANDIDATE"
+    else:
+        detail.append("fresh_signal_candidate=NO")
+        detail.append("note=read-only scan only; no virtual fill or exchange order")
+        status = "NO_FRESH_SIGNAL"
+
+    report = write_report(status, "\n".join(detail))
+    print("\n".join(detail))
+    print(f"Paper scan complete; report={report}; orders_submitted=0")
     return 0
 
 

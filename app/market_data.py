@@ -14,6 +14,8 @@ from typing import Any
 import requests
 
 BASE_URL = "https://public.coindcx.com/market_data/candlesticks"
+ACTIVE_INSTRUMENTS_URL = "https://api.coindcx.com/exchange/v1/derivatives/futures/data/active_instruments"
+INSTRUMENT_DETAILS_URL = "https://api.coindcx.com/exchange/v1/derivatives/futures/data/instrument"
 INTERVAL_SECONDS = 300
 _RESOLUTION_SECONDS = {"5": 300, "60": 3600}
 DEFAULT_LIMIT = 100
@@ -26,6 +28,67 @@ class MarketDataNotConfigured(RuntimeError):
 
 class MarketDataError(RuntimeError):
     """Raised when CoinDCX returns invalid or unavailable candle data."""
+
+
+def fetch_active_instruments(
+    margin_currency: str = "INR", *, session: Any = requests
+) -> list[str]:
+    """Return active futures instruments for the requested margin currency.
+
+    This is a public GET only. It never authenticates or changes account state.
+    """
+    if margin_currency not in {"INR", "USDT"}:
+        raise ValueError("margin_currency must be 'INR' or 'USDT'")
+    try:
+        response = session.get(
+            ACTIVE_INSTRUMENTS_URL,
+            params={"margin_currency_short_name[]": margin_currency},
+            timeout=TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise MarketDataError(f"CoinDCX active-instruments request failed: {exc}") from exc
+    if not isinstance(payload, list) or not all(isinstance(x, str) for x in payload):
+        raise MarketDataError("CoinDCX returned an unexpected active-instruments response.")
+    return payload
+
+
+def verify_active_instrument(
+    pair: str, margin_currency: str = "INR", *, session: Any = requests
+) -> dict[str, Any]:
+    """Confirm pair appears in CoinDCX's active futures list for the margin mode."""
+    instrument = pair.strip()
+    if not instrument.startswith("B-") or "_" not in instrument:
+        raise MarketDataNotConfigured("Pair must match the official futures instrument format.")
+    active = fetch_active_instruments(margin_currency, session=session)
+    if instrument not in active:
+        raise MarketDataNotConfigured(
+            f"{instrument} is not listed as active for {margin_currency} margin."
+        )
+    try:
+        response = session.get(
+            INSTRUMENT_DETAILS_URL,
+            params={"pair": instrument, "margin_currency_short_name": margin_currency},
+            timeout=TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise MarketDataError(f"CoinDCX instrument-details request failed: {exc}") from exc
+    if not isinstance(payload, dict) or not payload:
+        raise MarketDataError("CoinDCX returned an unexpected instrument-details response.")
+    # Do not treat a non-empty response as proof unless it identifies the requested
+    # instrument and margin currency. If the API schema differs, fail closed and
+    # make the mismatch visible in the paper report.
+    returned_pair = payload.get("pair")
+    returned_margin = payload.get("margin_currency_short_name")
+    if returned_pair != instrument or returned_margin != margin_currency:
+        raise MarketDataError(
+            "CoinDCX instrument-details response did not confirm the requested "
+            f"pair/margin (pair={returned_pair!r}, margin={returned_margin!r})."
+        )
+    return payload
 
 
 def fetch_latest_candles(

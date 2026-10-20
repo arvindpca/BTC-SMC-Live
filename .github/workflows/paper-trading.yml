@@ -20,6 +20,7 @@ jobs:
     env:
       PAPER_ONLY: "true"
       EXECUTION_MODE: "PAPER"
+      COINDCX_FUTURES_PAIR: "B-BTC_USDT"
       PYTHONUNBUFFERED: "1"
     steps:
       - name: Checkout
@@ -35,7 +36,7 @@ jobs:
           pip install -r requirements.txt
       - name: Enforce paper-only mode
         run: python -m app.config --check-paper-only
-      - name: Run one bounded paper cycle
+      - name: Run one bounded read-only paper scan
         run: python -m app.paper_runner
       - name: Upload report
         if: always()

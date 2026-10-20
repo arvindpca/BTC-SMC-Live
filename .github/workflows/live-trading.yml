@@ -28,7 +28,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Safety hardening proposed in this PR: do not execute real-money trading.
+  # This disables future runs of this job if the PR is reviewed and merged.
   trade:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 355
     env:
