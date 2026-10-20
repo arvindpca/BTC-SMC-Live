@@ -138,6 +138,10 @@ class FakeExchange(FuturesClient):
         self.calls.append(("tpsl", kw))
         if self.fail_tpsl:
             raise CoinDCXError("HTTP 400 tpsl")
+        if self.opened:
+            if self.sl_visible:
+                self.opened["stop_loss_trigger"] = kw["stop_price"]
+            self.opened["take_profit_trigger"] = kw["target_price"]
 
     def exit_position(self, position_id):
         self.calls.append(("exit", position_id))
