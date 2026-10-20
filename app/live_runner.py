@@ -486,7 +486,7 @@ def _protect_or_exit(client, config, signal: Signal, position, state, notify, su
     notify(
         "BTC SMC LIVE ENTRY - protected\n" + summary +
         f"\nFill {fill:.2f} | exchange SL {stop} | exchange TP(4R) {target}"
-        f"\nMargin Rs{config.margin_inr:.0f} x{config.leverage}{note}"
+        f"\nMargin Rs{config.margin_inr:.0f} x{config.leverage}"
         "\nAt 2R: SL -> 2R | at 3R: SL -> 3R | exit at 4R (no partial exits)"
     )
     return {"status": "ORDER_PLACED_PROTECTED", "orders_submitted": 2, "fill": fill, "sl": stop, "tp": target}
