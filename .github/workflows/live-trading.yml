@@ -26,7 +26,7 @@ jobs:
     env:
       LIVE_MODE: ${{ vars.LIVE_MODE || 'OFF' }}
       LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM }}
-      COINDCX_FUTURES_PAIR: ${{ vars.COINDCX_FUTURES_PAIR }}
+      COINDCX_FUTURES_PAIR: B-BTC_USDT  # locked; the bot refuses any other pair
       COINDCX_MARGIN_CURRENCY: INR
       MARGIN_INR: ${{ vars.MARGIN_INR || '200' }}
       LEVERAGE: ${{ vars.LEVERAGE || '30' }}

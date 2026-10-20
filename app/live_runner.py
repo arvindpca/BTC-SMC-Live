@@ -35,6 +35,7 @@ from app.market_data import fetch_latest_candles
 from app.strategy_live import Signal, latest_signal
 
 CONFIRM_PHRASE = "YES_TRADE_REAL_MONEY"
+ALLOWED_PAIR = "B-BTC_USDT"  # hard lock: this bot trades BTC/USDT futures only
 STATE_PATH = Path("state/live_state.json")
 FILL_POLL_SECONDS = 20
 MAX_FILL_RISK_DRIFT = 1.25  # actual risk distance may be at most 125% of planned
@@ -84,10 +85,10 @@ def load_config(env: dict[str, str] | None = None) -> LiveConfig:
     if not (1 <= max_trades <= 20) or not (0 <= age <= 3):
         raise ConfigError("MAX_TRADES_PER_DAY must be 1-20 and MAX_SIGNAL_AGE_BARS 0-3")
 
-    pair = get("COINDCX_FUTURES_PAIR") or get("COINDCX_FUTURES_INSTRUMENT")
+    pair = get("COINDCX_FUTURES_PAIR") or get("COINDCX_FUTURES_INSTRUMENT") or ALLOWED_PAIR
     if mode != "OFF":
-        if not pair.startswith("B-") or "_" not in pair:
-            raise ConfigError("COINDCX_FUTURES_PAIR must look like B-BTC_USDT (set it as an Actions variable)")
+        if pair != ALLOWED_PAIR:
+            raise ConfigError(f"This bot is locked to {ALLOWED_PAIR} only (got {pair!r})")
         if not get("COINDCX_API_KEY") or not get("COINDCX_API_SECRET"):
             raise ConfigError("COINDCX_API_KEY / COINDCX_API_SECRET secrets are missing")
 
@@ -214,6 +215,8 @@ def run_cycle(
     now: float | None = None,
 ) -> dict[str, Any]:
     notify = notify or make_notifier(config)
+    if config.mode != "OFF" and config.pair != ALLOWED_PAIR:
+        raise ConfigError(f"This bot is locked to {ALLOWED_PAIR} only")
     if config.mode == "OFF":
         print("LIVE_MODE=OFF: nothing to do (no network calls, no orders).")
         return {"status": "OFF", "orders_submitted": 0}

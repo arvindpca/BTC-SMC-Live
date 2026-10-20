@@ -49,6 +49,8 @@ def test_live_requires_confirmation_phrase():
         {"LIVE_MODE": "DRY_RUN", "LEVERAGE": "31"},
         {"LIVE_MODE": "DRY_RUN", "COINDCX_MARGIN_CURRENCY": "USDT"},
         {"LIVE_MODE": "DRY_RUN", "COINDCX_FUTURES_PAIR": "BTCINR"},
+        {"LIVE_MODE": "DRY_RUN", "COINDCX_FUTURES_PAIR": "B-ETH_USDT"},
+        {"LIVE_MODE": "DRY_RUN", "COINDCX_FUTURES_PAIR": "B-BTC_INR"},
         {"LIVE_MODE": "NONSENSE"},
     ],
 )
@@ -266,3 +268,12 @@ def test_secrets_not_in_notifications(monkeypatch, tmp_path):
     config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
     _, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
     assert all("COINDCX" not in m for m in msgs)
+
+
+def test_pair_defaults_to_btc_usdt_and_is_locked():
+    assert cfg(LIVE_MODE="DRY_RUN", COINDCX_FUTURES_PAIR="").pair == "B-BTC_USDT"
+    from dataclasses import replace
+    import app.live_runner as lr_mod
+    with pytest.raises(ConfigError):
+        run_cycle(replace(cfg(LIVE_MODE="DRY_RUN"), pair="B-ETH_USDT"), client=object(),
+                  fetch=lambda **k: [], notify=lambda m: None)
