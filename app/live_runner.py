@@ -282,11 +282,39 @@ def run_cycle(
     now_ts = time.time() if now is None else now
     c5 = fetch(pair=config.pair, limit=500, now_seconds=int(now_ts), resolution="5")
     c1 = fetch(pair=config.pair, limit=120, now_seconds=int(now_ts), resolution="60")
-    if config.mode == "LIVE" and load_state(state_path).get("open_trade"):
+
+    # Defensive freshness check: candle timestamps are UTC epoch milliseconds and
+    # refer to candle OPEN. The last completed candle must not be excessively old.
+    # Empty data is also blocked; it must never be interpreted as a no-signal scan.
+    if c5 and c1:
+        now_ms = int(now_ts * 1000)
+        latest_5m_close_ms = int(c5[-1]["timestamp"]) + 5 * 60 * 1000
+        latest_1h_close_ms = int(c1[-1]["timestamp"]) + 60 * 60 * 1000
+        # Allow one interval of delivery delay after candle close, but not older data.
+        if (now_ms - latest_5m_close_ms > 10 * 60 * 1000
+                or now_ms - latest_1h_close_ms > 60 * 60 * 1000):
+            notify("BTC SMC: stale 5m/1h candles detected; cycle blocked before signal evaluation.")
+            return {"status": "STALE_OR_MISSING_DATA", "orders_submitted": 0}
+    if config.mode == "LIVE":
+        # Reconcile exchange position before scanning for a new entry. If exchange has
+        # an open position but local state is missing, never open another position.
         client = client or FuturesClient(config.api_key, config.api_secret)
-        managed = manage_open_trade(config, client, c5, state_path, notify)
-        if managed["status"] != "TRADE_CLOSED":
-            return managed
+        local_state = load_state(state_path)
+        try:
+            exchange_position = client.open_position(config.pair)
+        except CoinDCXError as exc:
+            notify(f"BTC SMC LIVE: position reconciliation failed; new entry blocked ({type(exc).__name__}).")
+            return {"status": "POSITION_CHECK_FAILED", "orders_submitted": 0}
+        if exchange_position is not None and not local_state.get("open_trade"):
+            notify(
+                "BTC SMC LIVE: exchange position exists but local trade state is missing. "
+                "No new entry will be sent. Verify the position and its SL/TP manually on CoinDCX."
+            )
+            return {"status": "ORPHAN_POSITION_MANUAL_REVIEW", "orders_submitted": 0}
+        if local_state.get("open_trade"):
+            managed = manage_open_trade(config, client, c5, state_path, notify)
+            if managed["status"] != "TRADE_CLOSED":
+                return managed
     try:  # the report is diagnostics only; it must never break trading
         print(format_scan_report(analyze(c5, c1)[1]))
     except Exception as exc:  # noqa: BLE001
@@ -365,8 +393,18 @@ def run_cycle(
     try:
         client.create_market_order(pair=config.pair, side=side, quantity=qty, leverage=config.leverage)
     except CoinDCXError as exc:
-        notify(f"BTC SMC LIVE: ORDER REJECTED, nothing opened. {exc}\n{summary}")
-        return {"status": "ORDER_REJECTED", "orders_submitted": 1, "error": str(exc)}
+        # A transport/API error can happen after the exchange accepted the order.
+        # The signal marker was persisted before submission, so never retry blindly.
+        notify(
+            "BTC SMC LIVE: ORDER OUTCOME UNKNOWN. Do not retry automatically. "
+            "Check CoinDCX orders and positions manually before any further action. "
+            f"Error type: {type(exc).__name__}.\n{summary}"
+        )
+        return {
+            "status": "ORDER_OUTCOME_UNKNOWN",
+            "orders_submitted": 1,
+            "error_type": type(exc).__name__,
+        }
 
     position = _wait_for_position(client, config.pair, sleep)
     if position is None:
@@ -403,17 +441,41 @@ def _protect_or_exit(client, config, signal: Signal, position, state, notify, su
     except CoinDCXError as exc:
         return fail_safe(f"SL/TP placement failed: {exc}")
 
-    note = ""
     try:
         check = client.open_position(config.pair)
-        if check is None:
-            note = "\nPosition already closed right after protection (SL/TP hit or exited)."
-        elif "stop_loss_trigger" in check and not check.get("stop_loss_trigger"):
-            return fail_safe("stop loss not visible on exchange after placement")
-        elif "stop_loss_trigger" not in check:
-            note = "\nWARNING: could not verify SL via positions API (field absent); relying on API success response."
     except CoinDCXError as exc:
-        note = f"\nWARNING: SL verification call failed ({exc}); relying on API success response."
+        return fail_safe(f"could not verify protective orders after placement ({type(exc).__name__})")
+
+    if check is None:
+        # Position no longer exists; do not record a phantom open trade.
+        state["open_trade"] = None
+        save_state(state, state_path)
+        notify("BTC SMC: position is no longer open after protection call. Check exchange order history for exact exit/P&L.")
+        return {"status": "POSITION_CLOSED_AFTER_PROTECTION", "orders_submitted": 2}
+
+    # Fail closed: a successful placement response is not proof that exchange-side
+    # protection exists. Missing SL field is unverified, not success.
+    if "stop_loss_trigger" not in check or not check.get("stop_loss_trigger"):
+        return fail_safe("stop loss missing or unverified on exchange after placement")
+
+    # Verify the actual stop matches the requested stop within one tick when the
+    # API returns a numeric trigger. TP fields vary by API response; if absent,
+    # do not claim that both protections are verified.
+    try:
+        actual_stop = float(check["stop_loss_trigger"])
+    except (TypeError, ValueError):
+        return fail_safe("stop loss trigger returned in an invalid format")
+    if abs(actual_stop - stop) > (tick or 0.01):
+        return fail_safe("exchange stop price does not match requested stop")
+    tp_value = check.get("take_profit_trigger", check.get("take_profit_price"))
+    if tp_value in (None, ""):
+        return fail_safe("take-profit trigger not visible on exchange after placement")
+    try:
+        actual_target = float(tp_value)
+    except (TypeError, ValueError):
+        return fail_safe("take-profit trigger returned in an invalid format")
+    if abs(actual_target - target) > (tick or 0.01):
+        return fail_safe("exchange take-profit price does not match requested target")
 
     state["open_trade"] = {
         "side": signal.side, "entry": fill, "initial_risk": actual_risk, "stop": stop,
@@ -424,7 +486,7 @@ def _protect_or_exit(client, config, signal: Signal, position, state, notify, su
     notify(
         "BTC SMC LIVE ENTRY - protected\n" + summary +
         f"\nFill {fill:.2f} | exchange SL {stop} | exchange TP(4R) {target}"
-        f"\nMargin Rs{config.margin_inr:.0f} x{config.leverage}{note}"
+        f"\nMargin Rs{config.margin_inr:.0f} x{config.leverage}"
         "\nAt 2R: SL -> 2R | at 3R: SL -> 3R | exit at 4R (no partial exits)"
     )
     return {"status": "ORDER_PLACED_PROTECTED", "orders_submitted": 2, "fill": fill, "sl": stop, "tp": target}

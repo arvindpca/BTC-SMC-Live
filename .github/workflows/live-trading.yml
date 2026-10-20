@@ -1,15 +1,12 @@
 name: BTC-SMC Live Trading (CoinDCX INR futures)
 
-# Stage 1 (default): LIVE_MODE=OFF  -> does nothing.
-# Stage 2: set repo variable LIVE_MODE=DRY_RUN -> reads real data, logs the order it WOULD place.
-# Stage 3: set LIVE_MODE=LIVE and LIVE_CONFIRM=YES_TRADE_REAL_MONEY -> real orders.
-# Flip LIVE_MODE back to OFF (or disable this workflow) to stop trading immediately.
-# Open positions are protected by exchange-side SL/TP; stopping the bot does NOT close them.
+# SAFETY LOCK: this hosted workflow is intentionally disabled for exchange orders.
+# GitHub Actions schedules are best-effort and are not a 24/7 execution guarantee.
+# Do not remove this lock until all safety blockers have been fixed and reviewed.
 
 on:
   workflow_dispatch:
   schedule:
-    # GitHub may delay or skip scheduled runs; exchange-side SL/TP covers that gap.
     - cron: "*/5 * * * *"
 
 permissions:
@@ -24,13 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
-      LIVE_MODE: ${{ vars.LIVE_MODE || secrets.LIVE_MODE || 'OFF' }}
-      LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM || secrets.LIVE_CONFIRM }}
-      COINDCX_FUTURES_PAIR: B-BTC_USDT  # locked; the bot refuses any other pair
+      LIVE_MODE: OFF
+      LIVE_CONFIRM: ""
+      COINDCX_FUTURES_PAIR: B-BTC_USDT
       COINDCX_MARGIN_CURRENCY: INR
-      MARGIN_INR: ${{ vars.MARGIN_INR || secrets.MARGIN_INR || '300' }}
-      LEVERAGE: ${{ vars.LEVERAGE || secrets.LEVERAGE || '30' }}
-      MAX_TRADES_PER_DAY: ${{ vars.MAX_TRADES_PER_DAY || secrets.MAX_TRADES_PER_DAY || '3' }}
+      MARGIN_INR: "300"
+      LEVERAGE: "30"
+      MAX_TRADES_PER_DAY: "3"
       COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
       COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -46,13 +43,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Prepare state directory
+        run: mkdir -p state
       - name: Restore duplicate-signal guard
         uses: actions/cache/restore@v4
         with:
           path: state
           key: live-state-${{ github.run_id }}
           restore-keys: live-state-
-      - name: Run one trading cycle
+      - name: Run one trading cycle (hard-locked OFF)
         run: python -m app.live_runner
       - name: Save duplicate-signal guard
         if: always()

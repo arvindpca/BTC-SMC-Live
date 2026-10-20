@@ -138,6 +138,10 @@ class FakeExchange(FuturesClient):
         self.calls.append(("tpsl", kw))
         if self.fail_tpsl:
             raise CoinDCXError("HTTP 400 tpsl")
+        if self.opened:
+            if self.sl_visible:
+                self.opened["stop_loss_trigger"] = kw["stop_price"]
+            self.opened["take_profit_trigger"] = kw["target_price"]
 
     def exit_position(self, position_id):
         self.calls.append(("exit", position_id))
@@ -230,21 +234,23 @@ def test_invisible_stop_after_placement_triggers_exit(monkeypatch, tmp_path):
     assert result["status"] == "FAILSAFE_EXITED"
 
 
-def test_rejected_order_is_not_retried_next_run(monkeypatch, tmp_path):
+def test_order_error_is_unknown_and_not_retried_next_run(monkeypatch, tmp_path):
     ex = FakeExchange(details=SMALL_MIN, fail_order=True)
     config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
-    first, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    first, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
     second, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
-    assert first["status"] == "ORDER_REJECTED"
+    assert first["status"] == "ORDER_OUTCOME_UNKNOWN"
+    assert "Do not retry automatically" in msgs[0]
     assert second["status"] == "DUPLICATE_SIGNAL"
     assert ex.kinds().count("order") == 1
 
 
-def test_existing_position_blocks_new_order(monkeypatch, tmp_path):
+def test_exchange_position_without_local_state_blocks_new_entry(monkeypatch, tmp_path):
     ex = FakeExchange(details=SMALL_MIN, positions=[{"pair": "B-BTC_USDT", "active_pos": 0.1, "id": "x"}])
     config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
-    result, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
-    assert result["status"] == "POSITION_OPEN" and ex.calls == []
+    result, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "ORPHAN_POSITION_MANUAL_REVIEW" and ex.calls == []
+    assert "local trade state is missing" in msgs[0]
 
 
 def test_below_minimum_order_is_blocked_with_explanation(monkeypatch, tmp_path):
@@ -315,8 +321,36 @@ def run_manage(monkeypatch, tmp_path, state, candles, exchange):
     lr.save_state(state, tmp_path / "state.json")
     msgs = []
     config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
-    result = run_cycle(config, client=exchange, fetch=lambda **k: candles, state_path=tmp_path / "state.json",
-                       notify=msgs.append, sleep=lambda s: None, now=1_800_000_300)
+    now_seconds = 1_800_000_300
+    # Keep the fixtures recent so these tests exercise position management rather
+    # than correctly tripping the stale-market-data guard.
+    now_ms = now_seconds * 1000
+    fresh_candles = []
+    for i, item in enumerate(candles):
+        c = dict(item)
+        c["timestamp"] = now_ms - (len(candles) - i) * 5 * 60 * 1000
+        fresh_candles.append(c)
+    # Preserve which fixture candle is the entry candle while remapping timestamps.
+    # If no fixture represents the entry candle, place entry one interval before the first.
+    if fresh_candles and state.get("open_trade"):
+        original_entry_time = int(state["open_trade"]["entry_bar_time"])
+        matching_index = next(
+            (i for i, item in enumerate(candles)
+             if int(item["timestamp"]) == original_entry_time),
+            None,
+        )
+        if matching_index is None:
+            state["open_trade"]["entry_bar_time"] = (
+                int(fresh_candles[0]["timestamp"]) - 5 * 60 * 1000
+            )
+        else:
+            state["open_trade"]["entry_bar_time"] = int(
+                fresh_candles[matching_index]["timestamp"]
+            )
+        lr.save_state(state, tmp_path / "state.json")
+    result = run_cycle(config, client=exchange,
+                       fetch=lambda **k: fresh_candles, state_path=tmp_path / "state.json",
+                       notify=msgs.append, sleep=lambda s: None, now=now_seconds)
     return result, msgs, lr.load_state(tmp_path / "state.json")
 
 
