@@ -294,3 +294,94 @@ def test_wide_but_inside_liquidation_stop_is_traded(monkeypatch, tmp_path):
     sig = make_signal("LONG", 100_000, 97_500)  # 2.5%: above the old filter's edge region, below liquidation
     result, _ = run(monkeypatch, tmp_path, config, ex, sig)
     assert result["status"] == "ORDER_PLACED_PROTECTED"
+
+
+# ---------------- 2R / 3R trailing (paper-bot logic) ----------------
+def trade_state(side="LONG", entry=100_000.0, risk=1_000.0, max_rr=0, entry_bar=1_000):
+    target = entry + 4 * risk if side == "LONG" else entry - 4 * risk
+    stop = entry - risk if side == "LONG" else entry + risk
+    return {"last_signal_bar_time": entry_bar, "day": "2027-01-15", "trades_today": 1,
+            "open_trade": {"side": side, "entry": entry, "initial_risk": risk, "stop": stop,
+                           "target": target, "entry_bar_time": entry_bar, "max_rr": max_rr,
+                           "position_id": "pos1"}}
+
+
+def candle(ts, high, low):
+    return {"timestamp": ts, "open": 100_000.0, "high": high, "low": low, "close": 100_000.0}
+
+
+def run_manage(monkeypatch, tmp_path, state, candles, exchange):
+    monkeypatch.setattr(lr, "latest_signal", lambda *a, **k: None)
+    lr.save_state(state, tmp_path / "state.json")
+    msgs = []
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    result = run_cycle(config, client=exchange, fetch=lambda **k: candles, state_path=tmp_path / "state.json",
+                       notify=msgs.append, sleep=lambda s: None, now=1_800_000_300)
+    return result, msgs, lr.load_state(tmp_path / "state.json")
+
+
+def open_pos():
+    return {"pair": "B-BTC_USDT", "active_pos": 0.006, "id": "pos1", "avg_price": 100_000.0}
+
+
+def test_trail_moves_sl_to_2r(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN); ex.opened = open_pos()
+    result, msgs, st = run_manage(monkeypatch, tmp_path, trade_state(),
+                                  [candle(2_000, 102_100.0, 100_500.0)], ex)
+    assert result["status"] == "TRAIL_UPDATED" and result["rr"] == 2
+    assert ex.calls[0][0] == "tpsl" and ex.calls[0][1]["stop_price"] == 102_000.0
+    assert ex.calls[0][1]["target_price"] == 104_000.0
+    assert st["open_trade"]["max_rr"] == 2
+
+
+def test_trail_jumps_straight_to_3r(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN); ex.opened = open_pos()
+    result, _, st = run_manage(monkeypatch, tmp_path, trade_state(),
+                               [candle(2_000, 103_050.0, 100_500.0)], ex)
+    assert result["rr"] == 3 and ex.calls[0][1]["stop_price"] == 103_000.0 and st["open_trade"]["max_rr"] == 3
+
+
+def test_no_trail_below_2r_and_never_on_entry_candle(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN); ex.opened = open_pos()
+    candles = [candle(1_000, 109_000.0, 100_000.0),  # the entry candle itself: ignored
+               candle(2_000, 101_900.0, 100_000.0)]
+    result, _, _ = run_manage(monkeypatch, tmp_path, trade_state(), candles, ex)
+    assert result["status"] == "POSITION_MANAGED" and ex.calls == []
+
+
+def test_trail_is_not_repeated_for_same_milestone(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN); ex.opened = open_pos()
+    result, _, _ = run_manage(monkeypatch, tmp_path, trade_state(max_rr=2),
+                              [candle(2_000, 102_500.0, 100_500.0)], ex)
+    assert result["status"] == "POSITION_MANAGED" and ex.calls == []
+
+
+def test_short_trail(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN); ex.opened = open_pos()
+    result, _, _ = run_manage(monkeypatch, tmp_path, trade_state("SHORT"),
+                              [candle(2_000, 99_500.0, 97_900.0)], ex)
+    assert result["rr"] == 2 and ex.calls[0][1]["stop_price"] == 98_000.0
+
+
+def test_trail_failure_keeps_original_stop_and_alerts(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN, fail_tpsl=True); ex.opened = open_pos()
+    result, msgs, st = run_manage(monkeypatch, tmp_path, trade_state(),
+                                  [candle(2_000, 102_100.0, 100_500.0)], ex)
+    assert result["status"] == "TRAIL_FAILED" and st["open_trade"]["max_rr"] == 0
+    assert "Original SL still active" in msgs[0]
+
+
+def test_closed_position_clears_trade_and_notifies(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)  # no open position on exchange
+    result, msgs, st = run_manage(monkeypatch, tmp_path, trade_state(max_rr=2),
+                                  [candle(2_000, 101_000.0, 100_000.0)], ex)
+    assert result["status"] == "NO_SIGNAL"  # trade cleared, then normal scan continues
+    assert st["open_trade"] is None and "closed on exchange" in msgs[0]
+
+
+def test_entry_records_trade_for_trailing(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    run(monkeypatch, tmp_path, config, ex, make_signal())
+    trade = lr.load_state(tmp_path / "state.json")["open_trade"]
+    assert trade["max_rr"] == 0 and trade["initial_risk"] == 1_000.0 and trade["target"] == 104_000.0

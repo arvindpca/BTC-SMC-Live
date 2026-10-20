@@ -204,6 +204,64 @@ def _wait_for_position(client: FuturesClient, pair: str, sleep: Callable[[float]
     return None
 
 
+def manage_open_trade(config, client, c5, state_path: Path, notify) -> dict[str, Any]:
+    """Paper-bot trailing: price reaches 2R -> SL to 2R; reaches 3R -> SL to 3R; 4R is the exchange TP.
+
+    Uses completed 5m candles AFTER the entry candle (same as the paper bot, so a milestone never
+    applies retroactively inside the candle that created it).  If moving the stop fails, the
+    original exchange-side stop stays in force and you are alerted.
+    """
+    state = load_state(state_path)
+    trade = state.get("open_trade")
+    if not trade:
+        return {"status": "TRADE_CLOSED", "orders_submitted": 0}
+    try:
+        position = client.open_position(config.pair)
+    except CoinDCXError as exc:
+        notify(f"BTC SMC LIVE: could not read position to manage trade ({exc}). Exchange SL/TP still active.")
+        return {"status": "POSITION_CHECK_FAILED", "orders_submitted": 0}
+    if position is None:
+        notify(
+            f"BTC SMC LIVE: {trade['side']} trade closed on exchange (stop / trailing stop / 4R target). "
+            f"Entry {trade['entry']:.2f}, last max RR reached: {trade['max_rr']}. Check CoinDCX for exact P/L."
+        )
+        state["open_trade"] = None
+        save_state(state, state_path)
+        return {"status": "TRADE_CLOSED", "orders_submitted": 0}
+
+    is_long = trade["side"] == "LONG"
+    direction = 1 if is_long else -1
+    entry, risk = float(trade["entry"]), float(trade["initial_risk"])
+    later = [c for c in c5 if int(c["timestamp"]) > int(trade["entry_bar_time"])]
+    if later:
+        best = max(float(c["high"]) for c in later) if is_long else min(float(c["low"]) for c in later)
+        for rr in (3, 2):
+            if rr <= int(trade["max_rr"]):
+                break
+            milestone = entry + direction * rr * risk
+            if (best >= milestone) if is_long else (best <= milestone):
+                try:
+                    details = client.instrument_details(config.pair)
+                    tick = details.get("price_increment") or details.get("tick_size")
+                    new_stop = round_price(milestone, float(tick) if tick else None)
+                    client.set_tpsl(
+                        position_id=str(position.get("id") or trade["position_id"]),
+                        stop_price=new_stop, target_price=float(trade["target"]),
+                    )
+                except (CoinDCXError, ValueError) as exc:
+                    notify(f"BTC SMC LIVE: reached {rr}R but moving SL failed ({exc}). Original SL still active - move it manually if needed.")
+                    return {"status": "TRAIL_FAILED", "orders_submitted": 0}
+                trade["max_rr"], trade["stop"] = rr, new_stop
+                state["open_trade"] = trade
+                save_state(state, state_path)
+                notify(
+                    f"BTC SMC LIVE - TRAILING STOP UPDATED\nSide: {trade['side']}\nReached: 1:{rr}\n"
+                    f"New SL: {new_stop}\nFinal target 1:4: {trade['target']}\nPosition still 100% open"
+                )
+                return {"status": "TRAIL_UPDATED", "orders_submitted": 1, "rr": rr}
+    return {"status": "POSITION_MANAGED", "orders_submitted": 0}
+
+
 def run_cycle(
     config: LiveConfig,
     *,
@@ -224,6 +282,11 @@ def run_cycle(
     now_ts = time.time() if now is None else now
     c5 = fetch(pair=config.pair, limit=500, now_seconds=int(now_ts), resolution="5")
     c1 = fetch(pair=config.pair, limit=120, now_seconds=int(now_ts), resolution="60")
+    if config.mode == "LIVE" and load_state(state_path).get("open_trade"):
+        client = client or FuturesClient(config.api_key, config.api_secret)
+        managed = manage_open_trade(config, client, c5, state_path, notify)
+        if managed["status"] != "TRADE_CLOSED":
+            return managed
     signal = latest_signal(c5, c1, max_age_bars=config.max_signal_age_bars)
     if signal is None:
         print("No fresh SMC signal on the latest completed candles.")
@@ -305,10 +368,10 @@ def run_cycle(
     if position is None:
         notify("BTC SMC LIVE: CRITICAL - order sent but no position found. CHECK COINDCX MANUALLY NOW.\n" + summary)
         return {"status": "CRITICAL_NO_POSITION_FOUND", "orders_submitted": 1}
-    return _protect_or_exit(client, config, signal, position, state, notify, summary, details)
+    return _protect_or_exit(client, config, signal, position, state, notify, summary, details, state_path)
 
 
-def _protect_or_exit(client, config, signal: Signal, position, state, notify, summary, details):
+def _protect_or_exit(client, config, signal: Signal, position, state, notify, summary, details, state_path=STATE_PATH):
     position_id = str(position.get("id"))
     fill = float(position.get("avg_price") or 0)
     is_long = signal.side == "LONG"
@@ -348,10 +411,17 @@ def _protect_or_exit(client, config, signal: Signal, position, state, notify, su
     except CoinDCXError as exc:
         note = f"\nWARNING: SL verification call failed ({exc}); relying on API success response."
 
+    state["open_trade"] = {
+        "side": signal.side, "entry": fill, "initial_risk": actual_risk, "stop": stop,
+        "target": target, "entry_bar_time": signal.bar_time, "max_rr": 0,
+        "position_id": position_id,
+    }
+    save_state(state, state_path)
     notify(
         "BTC SMC LIVE ENTRY - protected\n" + summary +
         f"\nFill {fill:.2f} | exchange SL {stop} | exchange TP(4R) {target}"
         f"\nMargin Rs{config.margin_inr:.0f} x{config.leverage}{note}"
+        "\nAt 2R: SL -> 2R | at 3R: SL -> 3R | exit at 4R (no partial exits)"
     )
     return {"status": "ORDER_PLACED_PROTECTED", "orders_submitted": 2, "fill": fill, "sl": stop, "tp": target}
 
