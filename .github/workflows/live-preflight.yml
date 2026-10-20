@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      EXECUTION_MODE: PAPER
+      EXECUTION_MODE: LIVE
       COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
       COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
       COINDCX_FUTURES_INSTRUMENT: ${{ vars.COINDCX_FUTURES_INSTRUMENT }}
