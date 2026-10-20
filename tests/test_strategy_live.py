@@ -92,3 +92,36 @@ def test_rejects_unsorted_or_duplicate_candles():
 def test_too_little_data_returns_nothing():
     assert scan_signals(C5[:10], H1) == []
     assert scan_signals(C5, H1[:3]) == []
+
+
+# ---------------- scan report (diagnostics) ----------------
+from app.strategy_live import analyze, format_scan_report  # noqa: E402
+
+
+def test_analyze_signals_identical_to_scan_signals():
+    signals, info = analyze(C5, H1)
+    assert signals == FULL
+    assert info["event_counts"].get("ENTRY_SIGNAL", 0) == len(FULL)
+
+
+def test_event_counts_follow_the_strategy_funnel():
+    _, info = analyze(C5, H1)
+    c = info["event_counts"]
+    assert c.get("SWEEP", 0) >= c.get("CHOCH", 0) >= c.get("FVG", 0) >= c.get("ENTRY_SIGNAL", 0) > 0
+
+
+def test_report_shows_bias_stage_and_events():
+    report = format_scan_report(analyze(C5, H1)[1])
+    for text in ("SMC SCAN REPORT", "1H bias", "Setup now", "Recent events", "SWEEP"):
+        assert text in report
+
+
+def test_report_for_every_prefix_never_crashes_and_names_a_stage():
+    for cut in (25, 80, 200, 450, 900, 1300):
+        info = analyze(C5[:cut], H1)[1]
+        text = format_scan_report(info)
+        assert "Setup now" in text or "SCAN REPORT" in text
+
+
+def test_report_with_too_little_data():
+    assert "not enough candles" in format_scan_report(analyze(C5[:5], H1)[1])

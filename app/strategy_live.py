@@ -87,7 +87,17 @@ def _h1_bias_table(h1: list[dict[str, Any]]):
 def scan_signals(
     candles_5m: list[dict[str, Any]], candles_1h: list[dict[str, Any]]
 ) -> list[Signal]:
-    """Replay all candles and return every entry the strategy would have taken.
+    """Every entry the strategy would have taken (see :func:`analyze` for the diagnostics)."""
+    return analyze(candles_5m, candles_1h)[0]
+
+
+def analyze(
+    candles_5m: list[dict[str, Any]], candles_1h: list[dict[str, Any]]
+) -> tuple[list[Signal], dict[str, Any]]:
+    """Replay all candles; return (signals, info).  ``info`` explains what the scan saw: current
+    1H bias, the setup stage at the last candle and the recent events (sweep, CHOCH, FVG, expiry...).
+
+    Replay all candles and return every entry the strategy would have taken.
 
     Both inputs must contain COMPLETED candles only, with ``timestamp`` = open time
     in epoch milliseconds.  Raises ValueError on unsorted/duplicate input.
@@ -99,7 +109,7 @@ def scan_signals(
         if any(b <= a for a, b in zip(times, times[1:])):
             raise ValueError(f"{name} candles must be strictly increasing in time")
     if len(c5) < 20 or len(h1) < 8:
-        return []
+        return [], {"note": f"not enough candles (5m={len(c5)}, 1h={len(h1)})", "events": []}
 
     t5 = [int(r["timestamp"]) for r in c5]
     o5 = [float(r["open"]) for r in c5]
@@ -113,6 +123,12 @@ def scan_signals(
 
     signals: list[Signal] = []
     setup: dict[str, Any] | None = None
+    events: list[tuple[int, str, str]] = []
+
+    def ev(idx: int, name: str, detail: str = "") -> None:
+        events.append((t5[idx], name, detail))
+
+    bias = "NEUTRAL"
     m = 0  # number of closed 1H candles at the current 5m bar
     sh_ptr = sl_ptr = 0
     known_sh: list[int] = []
@@ -136,16 +152,18 @@ def scan_signals(
         entered_now = False
 
         if setup:
-            if (
-                bar_time - setup["sweep_time"] > SETUP_EXPIRY * CANDLE_5M_MS
-                or setup["side"] != bias
-            ):
+            if bar_time - setup["sweep_time"] > SETUP_EXPIRY * CANDLE_5M_MS:
+                ev(i, "SETUP_EXPIRED", f"{setup['side']} setup older than {SETUP_EXPIRY} candles (was at {setup['stage']})")
+                setup = None
+            elif setup["side"] != bias:
+                ev(i, "BIAS_CHANGED", f"1H bias is now {bias}; dropped {setup['side']} setup (was at {setup['stage']})")
                 setup = None
 
         if setup:
             is_long = setup["side"] == "LONG"
             invalidated = lo5[i] < setup["extreme"] if is_long else hi5[i] > setup["extreme"]
             if invalidated:
+                ev(i, "SETUP_INVALIDATED", f"price broke the sweep extreme {setup['extreme']:.1f} (was at {setup['stage']})")
                 setup = None
             elif setup["stage"] == "SWEEP":
                 level = setup["break_level"]
@@ -153,15 +171,19 @@ def scan_signals(
                     choch = cl5[i] > level if is_long else cl5[i] < level
                     if choch:
                         setup["stage"] = "CHOCH"
+                        ev(i, "CHOCH", f"{setup['side']} close {cl5[i]:.1f} broke {level:.1f}")
             elif setup["stage"] == "CHOCH":
                 if i >= 2:
                     first_high, first_low = hi5[i - 2], lo5[i - 2]
                     if is_long and lo5[i] > first_high:
                         setup.update(stage="FVG", fvg_low=first_high, fvg_high=lo5[i], fvg_time=bar_time)
+                        ev(i, "FVG", f"zone {first_high:.1f} - {lo5[i]:.1f}")
                     elif (not is_long) and hi5[i] < first_low:
                         setup.update(stage="FVG", fvg_low=hi5[i], fvg_high=first_low, fvg_time=bar_time)
+                        ev(i, "FVG", f"zone {hi5[i]:.1f} - {first_low:.1f}")
             elif setup["stage"] == "FVG":
                 if bar_time - setup["fvg_time"] > FVG_EXPIRY * CANDLE_5M_MS:
+                    ev(i, "FVG_EXPIRED", f"no retest within {FVG_EXPIRY} candles")
                     setup = None
                 else:
                     touched = lo5[i] <= setup["fvg_high"] and hi5[i] >= setup["fvg_low"]
@@ -191,6 +213,9 @@ def scan_signals(
                                 )
                             )
                             entered_now = True
+                            ev(i, "ENTRY_SIGNAL", f"{setup['side']} entry {entry:.1f} SL {stop:.1f} TP {target:.1f}")
+                        else:
+                            ev(i, "ENTRY_SKIPPED", "stop on the wrong side of entry")
                         setup = None
 
         # A new sweep may only start when no position would be open on this bar
@@ -206,6 +231,7 @@ def scan_signals(
                         "extreme": lo5[i],
                         "break_level": hi5[known_sh[-1]] if known_sh else None,
                     }
+                    ev(i, "SWEEP", f"LONG: low {lo5[i]:.1f} swept swing low {swing_low:.1f}; CHOCH level " + ("-" if setup["break_level"] is None else f"{setup['break_level']:.1f}"))
             elif bias == "SHORT" and known_sh:
                 swing_high = hi5[known_sh[-1]]
                 if hi5[i] > swing_high and cl5[i] < swing_high:
@@ -216,8 +242,65 @@ def scan_signals(
                         "extreme": hi5[i],
                         "break_level": lo5[known_sl[-1]] if known_sl else None,
                     }
+                    ev(i, "SWEEP", f"SHORT: high {hi5[i]:.1f} swept swing high {swing_high:.1f}; CHOCH level " + ("-" if setup["break_level"] is None else f"{setup['break_level']:.1f}"))
 
-    return signals
+    last = len(c5) - 1
+    info = {
+        "last_bar_time": t5[last],
+        "last_close": cl5[last],
+        "bias": bias,
+        "h1_closed": m,
+        "last_h1_time": t1[m - 1] if m else None,
+        "swing_high": hi5[known_sh[-1]] if known_sh else None,
+        "swing_low": lo5[known_sl[-1]] if known_sl else None,
+        "setup": None if setup is None else {**setup, "age_bars": (t5[last] - setup["sweep_time"]) // CANDLE_5M_MS},
+        "signals_in_window": len(signals),
+        "events": events[-12:],
+        "event_counts": {k: sum(1 for e in events if e[1] == k) for k in sorted({e[1] for e in events})},
+        "candles_5m": len(c5),
+        "first_bar_time": t5[0],
+    }
+    return signals, info
+
+
+def _utc(ms: int | None) -> str:
+    from datetime import datetime, timezone
+
+    return "-" if ms is None else datetime.fromtimestamp(ms / 1000, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def format_scan_report(info: dict[str, Any]) -> str:
+    """Human-readable scan report for the Actions log (what stage the strategy is at)."""
+    if "note" in info:
+        return f"SCAN REPORT: {info['note']}"
+    lines = [
+        "================ SMC SCAN REPORT ================",
+        f"Candles scanned : {info['candles_5m']} x 5m (from {_utc(info['first_bar_time'])})",
+        f"Last 5m candle  : {_utc(info['last_bar_time'])}  close {info['last_close']:.1f}",
+        f"1H candles used : {info['h1_closed']} closed (last {_utc(info['last_h1_time'])})",
+        f"1H bias         : {info['bias']}",
+        "Last swing high : " + ("-" if info["swing_high"] is None else f"{info['swing_high']:.1f}")
+        + "   Last swing low: " + ("-" if info["swing_low"] is None else f"{info['swing_low']:.1f}"),
+    ]
+    setup = info["setup"]
+    if setup is None:
+        lines.append("Setup now       : NONE - waiting for a liquidity sweep in the direction of the 1H bias"
+                     if info["bias"] != "NEUTRAL" else "Setup now       : NONE - 1H bias is NEUTRAL, so no sweeps are taken")
+    else:
+        stage_hint = {
+            "SWEEP": "sweep seen; waiting for CHOCH close beyond " + ("-" if setup.get("break_level") is None else f"{setup['break_level']:.1f}"),
+            "CHOCH": "CHOCH done; waiting for a fair value gap",
+            "FVG": f"FVG {setup.get('fvg_low'):.1f}-{setup.get('fvg_high'):.1f} formed; waiting for retest + rejection candle",
+        }.get(setup["stage"], "")
+        lines.append(f"Setup now       : {setup['side']} at stage {setup['stage']} (age {setup['age_bars']} candles) - {stage_hint}")
+    lines.append(f"Entry signals in scanned window: {info['signals_in_window']}")
+    if info["event_counts"]:
+        lines.append("Event counts    : " + ", ".join(f"{k}={v}" for k, v in info["event_counts"].items()))
+    lines.append("Recent events (oldest -> newest):")
+    for t, name, detail in info["events"] or [(0, "-", "no events in window")]:
+        lines.append(f"  {_utc(t) if t else '-':<20} {name:<18} {detail}")
+    lines.append("=================================================")
+    return "\n".join(lines)
 
 
 def latest_signal(

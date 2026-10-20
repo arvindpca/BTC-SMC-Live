@@ -32,7 +32,7 @@ import requests
 
 from app.coindcx_futures import CoinDCXError, FuturesClient
 from app.market_data import fetch_latest_candles
-from app.strategy_live import Signal, latest_signal
+from app.strategy_live import Signal, analyze, format_scan_report, latest_signal
 
 CONFIRM_PHRASE = "YES_TRADE_REAL_MONEY"
 ALLOWED_PAIR = "B-BTC_USDT"  # hard lock: this bot trades BTC/USDT futures only
@@ -287,6 +287,10 @@ def run_cycle(
         managed = manage_open_trade(config, client, c5, state_path, notify)
         if managed["status"] != "TRADE_CLOSED":
             return managed
+    try:  # the report is diagnostics only; it must never break trading
+        print(format_scan_report(analyze(c5, c1)[1]))
+    except Exception as exc:  # noqa: BLE001
+        print(f"(scan report unavailable: {type(exc).__name__}: {exc})")
     signal = latest_signal(c5, c1, max_age_bars=config.max_signal_age_bars)
     if signal is None:
         print("No fresh SMC signal on the latest completed candles.")
