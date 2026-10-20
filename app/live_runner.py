@@ -441,17 +441,41 @@ def _protect_or_exit(client, config, signal: Signal, position, state, notify, su
     except CoinDCXError as exc:
         return fail_safe(f"SL/TP placement failed: {exc}")
 
-    note = ""
     try:
         check = client.open_position(config.pair)
-        if check is None:
-            note = "\nPosition already closed right after protection (SL/TP hit or exited)."
-        elif "stop_loss_trigger" in check and not check.get("stop_loss_trigger"):
-            return fail_safe("stop loss not visible on exchange after placement")
-        elif "stop_loss_trigger" not in check:
-            note = "\nWARNING: could not verify SL via positions API (field absent); relying on API success response."
     except CoinDCXError as exc:
-        note = f"\nWARNING: SL verification call failed ({exc}); relying on API success response."
+        return fail_safe(f"could not verify protective orders after placement ({type(exc).__name__})")
+
+    if check is None:
+        # Position no longer exists; do not record a phantom open trade.
+        state["open_trade"] = None
+        save_state(state, state_path)
+        notify("BTC SMC: position is no longer open after protection call. Check exchange order history for exact exit/P&L.")
+        return {"status": "POSITION_CLOSED_AFTER_PROTECTION", "orders_submitted": 2}
+
+    # Fail closed: a successful placement response is not proof that exchange-side
+    # protection exists. Missing SL field is unverified, not success.
+    if "stop_loss_trigger" not in check or not check.get("stop_loss_trigger"):
+        return fail_safe("stop loss missing or unverified on exchange after placement")
+
+    # Verify the actual stop matches the requested stop within one tick when the
+    # API returns a numeric trigger. TP fields vary by API response; if absent,
+    # do not claim that both protections are verified.
+    try:
+        actual_stop = float(check["stop_loss_trigger"])
+    except (TypeError, ValueError):
+        return fail_safe("stop loss trigger returned in an invalid format")
+    if abs(actual_stop - stop) > (tick or 0.01):
+        return fail_safe("exchange stop price does not match requested stop")
+    tp_value = check.get("take_profit_trigger", check.get("take_profit_price"))
+    if tp_value in (None, ""):
+        return fail_safe("take-profit trigger not visible on exchange after placement")
+    try:
+        actual_target = float(tp_value)
+    except (TypeError, ValueError):
+        return fail_safe("take-profit trigger returned in an invalid format")
+    if abs(actual_target - target) > (tick or 0.01):
+        return fail_safe("exchange take-profit price does not match requested target")
 
     state["open_trade"] = {
         "side": signal.side, "entry": fill, "initial_risk": actual_risk, "stop": stop,
