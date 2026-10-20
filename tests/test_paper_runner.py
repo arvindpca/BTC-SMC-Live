@@ -61,3 +61,23 @@ def test_cycle_fails_closed_on_market_data_error(monkeypatch, tmp_path):
     body = next((tmp_path / "reports").glob("*.json")).read_text(encoding="utf-8")
     assert "BLOCKED_MARKET_DATA" in body
     assert '"orders_submitted": 0' in body
+
+
+
+def test_cycle_blocks_when_candle_history_is_too_short(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PAPER_ONLY", "true")
+    monkeypatch.setenv("EXECUTION_MODE", "PAPER")
+    monkeypatch.setenv("COINDCX_FUTURES_PAIR", "B-BTC_USDT")
+    monkeypatch.setattr(runner, "verify_active_instrument", lambda *a, **k: {"pair": "B-BTC_USDT"})
+    monkeypatch.setattr(runner, "fetch_latest_candles", lambda **kwargs: [
+        {"timestamp": 1_800_000_000_000, "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1}
+    ])
+    monkeypatch.setattr(runner, "analyze", lambda c5, h1: ([], {"note": "not enough candles", "events": []}))
+    monkeypatch.setattr(runner, "format_scan_report", lambda info: "not enough candles")
+
+    assert runner.run_cycle() == 0
+    body = next((tmp_path / "reports").glob("*.json")).read_text(encoding="utf-8")
+    assert "BLOCKED_INSUFFICIENT_DATA" in body
+    assert "minimum_required_5m=20" in body
+    assert '"orders_submitted": 0' in body
