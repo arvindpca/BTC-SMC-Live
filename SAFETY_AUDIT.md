@@ -14,7 +14,7 @@ This repository is **not approved for live trading**. A green CI run only verifi
 2. **Cache is not a durable ledger:** GitHub Actions cache is best-effort and not a transactional position database; it cannot guarantee at-most-once order execution.
 3. **Order timeout reconciliation:** The runner now labels submission errors as `ORDER_OUTCOME_UNKNOWN`, keeps the pre-submission duplicate guard, and alerts the operator to inspect CoinDCX manually; it does not yet reconcile using exchange order IDs. Never assume rejection from a timeout.
 4. **Protective-order confirmation:** Independently verify exchange-side SL and TP after placement and every modification. Missing fields or failed verification must mean unverified.
-5. **Freshness checks:** Reject stale 5-minute and hourly candles before signal evaluation.
+5. **Freshness checks:** The runner now rejects stale 5-minute/hourly candles when both feeds are present. The production fetcher raises on missing candle data, but empty mocked feeds bypass the freshness comparison; add explicit empty-feed tests before treating this blocker as fully closed.
 6. **Instrument and sizing:** Verify current instrument metadata, quantity step/minimum, margin currency, leverage mode, and TP/SL endpoint semantics using read-only/paper tests.
 7. **Entry type:** The current runner submits a MARKET order, not the requested LIMIT order.
 8. **Time-zone policy:** Define and test whether daily caps reset at UTC midnight or India time.
