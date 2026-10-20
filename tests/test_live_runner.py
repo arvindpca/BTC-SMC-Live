@@ -240,11 +240,12 @@ def test_rejected_order_is_not_retried_next_run(monkeypatch, tmp_path):
     assert ex.kinds().count("order") == 1
 
 
-def test_existing_position_blocks_new_order(monkeypatch, tmp_path):
+def test_exchange_position_without_local_state_blocks_new_entry(monkeypatch, tmp_path):
     ex = FakeExchange(details=SMALL_MIN, positions=[{"pair": "B-BTC_USDT", "active_pos": 0.1, "id": "x"}])
     config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
-    result, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
-    assert result["status"] == "POSITION_OPEN" and ex.calls == []
+    result, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "ORPHAN_POSITION_MANUAL_REVIEW" and ex.calls == []
+    assert "local trade state is missing" in msgs[0]
 
 
 def test_below_minimum_order_is_blocked_with_explanation(monkeypatch, tmp_path):
