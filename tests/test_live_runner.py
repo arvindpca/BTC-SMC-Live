@@ -230,12 +230,13 @@ def test_invisible_stop_after_placement_triggers_exit(monkeypatch, tmp_path):
     assert result["status"] == "FAILSAFE_EXITED"
 
 
-def test_rejected_order_is_not_retried_next_run(monkeypatch, tmp_path):
+def test_order_error_is_unknown_and_not_retried_next_run(monkeypatch, tmp_path):
     ex = FakeExchange(details=SMALL_MIN, fail_order=True)
     config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
-    first, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
+    first, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
     second, _ = run(monkeypatch, tmp_path, config, ex, make_signal())
-    assert first["status"] == "ORDER_REJECTED"
+    assert first["status"] == "ORDER_OUTCOME_UNKNOWN"
+    assert "Do not retry automatically" in msgs[0]
     assert second["status"] == "DUPLICATE_SIGNAL"
     assert ex.kinds().count("order") == 1
 
