@@ -272,12 +272,20 @@ def _ist(ms: int | None) -> str:
     ).strftime("%Y-%m-%d %H:%M IST")
 
 
+def _current_ist() -> str:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S IST")
+
+
 def format_scan_report(info: dict[str, Any]) -> str:
     """Human-readable scan report for the Actions log (what stage the strategy is at)."""
     if "note" in info:
         return f"SCAN REPORT: {info['note']}"
     lines = [
         "================ SMC SCAN REPORT ================",
+        f"Scan time       : {_current_ist()}",
         f"Candles scanned : {info['candles_5m']} x 5m (from {_ist(info['first_bar_time'])})",
         f"Last 5m candle  : {_ist(info['last_bar_time'])}  close {info['last_close']:.1f}",
         f"1H candles used : {info['h1_closed']} closed (last {_ist(info['last_h1_time'])})",
