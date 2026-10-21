@@ -263,10 +263,13 @@ def analyze(
     return signals, info
 
 
-def _utc(ms: int | None) -> str:
+def _ist(ms: int | None) -> str:
     from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
 
-    return "-" if ms is None else datetime.fromtimestamp(ms / 1000, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return "-" if ms is None else datetime.fromtimestamp(ms / 1000, timezone.utc).astimezone(
+        ZoneInfo("Asia/Kolkata")
+    ).strftime("%Y-%m-%d %H:%M IST")
 
 
 def format_scan_report(info: dict[str, Any]) -> str:
@@ -275,9 +278,9 @@ def format_scan_report(info: dict[str, Any]) -> str:
         return f"SCAN REPORT: {info['note']}"
     lines = [
         "================ SMC SCAN REPORT ================",
-        f"Candles scanned : {info['candles_5m']} x 5m (from {_utc(info['first_bar_time'])})",
-        f"Last 5m candle  : {_utc(info['last_bar_time'])}  close {info['last_close']:.1f}",
-        f"1H candles used : {info['h1_closed']} closed (last {_utc(info['last_h1_time'])})",
+        f"Candles scanned : {info['candles_5m']} x 5m (from {_ist(info['first_bar_time'])})",
+        f"Last 5m candle  : {_ist(info['last_bar_time'])}  close {info['last_close']:.1f}",
+        f"1H candles used : {info['h1_closed']} closed (last {_ist(info['last_h1_time'])})",
         f"1H bias         : {info['bias']}",
         "Last swing high : " + ("-" if info["swing_high"] is None else f"{info['swing_high']:.1f}")
         + "   Last swing low: " + ("-" if info["swing_low"] is None else f"{info['swing_low']:.1f}"),
@@ -298,7 +301,7 @@ def format_scan_report(info: dict[str, Any]) -> str:
         lines.append("Event counts    : " + ", ".join(f"{k}={v}" for k, v in info["event_counts"].items()))
     lines.append("Recent events (oldest -> newest):")
     for t, name, detail in info["events"] or [(0, "-", "no events in window")]:
-        lines.append(f"  {_utc(t) if t else '-':<20} {name:<18} {detail}")
+        lines.append(f"  {_ist(t) if t else '-':<20} {name:<18} {detail}")
     lines.append("=================================================")
     return "\n".join(lines)
 
