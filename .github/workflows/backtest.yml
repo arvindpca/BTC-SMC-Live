@@ -1,0 +1,36 @@
+name: BTC SMC Backtest (read-only)
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Days to backtest"
+        default: "10"
+permissions:
+  contents: write
+concurrency:
+  group: btc-backtest
+  cancel-in-progress: false
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run backtest (public candles only, no keys, no orders)
+        env:
+          BACKTEST_DAYS: ${{ inputs.days || '10' }}
+        run: python -u -m app.backtest
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/backtest_10d.txt data/backtest_10d.csv
+          git commit -q -m "chore: backtest result" || exit 0
+          git pull -q --rebase origin main; git push -q origin HEAD:main
