@@ -17,7 +17,7 @@ on:
       - "app/**"
       - ".github/workflows/live-trading.yml"
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "17 * * * *"
 
 permissions:
   contents: read
