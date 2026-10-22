@@ -1,0 +1,4 @@
+signal_time_ist,side,entry,stop,target,risk_pct,result,R,exit_time_ist,gross_inr,fees_inr,net_inr
+13-Oct 15:10,SHORT,83567.0,84134.2,81298.2,0.679,TRAIL_2R,2.0,14-Oct 18:45,122.2,10.8,111.4
+17-Oct 08:25,SHORT,81444.0,81589.7,80861.2,0.179,SL,-1.0,17-Oct 09:00,-16.1,10.8,-26.9
+19-Oct 13:30,SHORT,82630.0,83109.2,80713.2,0.58,TRAIL_2R,2.0,20-Oct 05:55,104.4,10.8,93.6

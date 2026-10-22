@@ -1,0 +1,12 @@
+BTC SMC BACKTEST - last 10 days (12-Oct 21:31 to 22-Oct 21:25 IST), B-BTC_USDT
+Candles used: 4000 x 5m, 500 x 1H | notional Rs9000 (margin x leverage) | fee assumption 0.06%/side
+Trades: 3 | wins: 2 | losses: 1 | win rate: 67%
+Total R: +3.00 | avg R/trade: +1.00 | exits: {'TRAIL_2R': 2, 'SL': 1}
+Gross P/L: Rs+210 | fees: Rs32 | NET: Rs+178
+Max drawdown (net): Rs27
+
+13-Oct 15:10 SHORT entry 83567.0 SL 84134.2 -> TRAIL_2R +2.00R  net Rs+111
+17-Oct 08:25 SHORT entry 81444.0 SL 81589.7 -> SL -1.00R  net Rs-27
+19-Oct 13:30 SHORT entry 82630.0 SL 83109.2 -> TRAIL_2R +2.00R  net Rs+94
+
+Notes: entry assumed at signal-bar close (live uses a market order, so real fills differ by slippage); stop is checked before target inside the same candle; past results do not guarantee future results.
