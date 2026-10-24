@@ -1,0 +1,80 @@
+BTC SMC BACKTEST - last 180 days (27-Apr 12:52 to 24-Oct 12:45 IST), B-BTC_USDT
+Candles used: 53000 x 5m, 5000 x 1H | notional Rs9000 (margin x leverage) | fee assumption 0.06%/side
+Trades: 69 | wins: 24 | losses: 45 | win rate: 35%
+Total R: +4.00 | avg R/trade: +0.06 | exits: {'SL': 45, 'TRAIL_2R': 23, 'TRAIL_3R': 1}
+Gross P/L: Rs+155 | fees: Rs745 | NET: Rs-591
+Max drawdown (net): Rs1352
+By month: Apr: 1 trades -1.0R Rs-39 | May: 11 trades -2.0R Rs-151 | Jun: 9 trades +6.0R Rs+315 | Jul: 16 trades -10.0R Rs-818 | Aug: 10 trades +2.0R Rs-319 | Sep: 12 trades +6.0R Rs+370 | Oct: 10 trades +3.0R Rs+52
+Profit factor (R): 1.09
+
+28-Apr 19:00 SHORT entry 76146.1 SL 76386.2 -> SL -1.00R  net Rs-39
+01-May 16:45 LONG  entry 77400.0 SL 77134.7 -> TRAIL_2R +2.00R  net Rs+51
+06-May 09:00 LONG  entry 81590.5 SL 81154.0 -> SL -1.00R  net Rs-59
+07-May 05:40 LONG  entry 81388.8 SL 81179.2 -> SL -1.00R  net Rs-34
+08-May 03:00 SHORT entry 79857.7 SL 80331.6 -> SL -1.00R  net Rs-64
+08-May 23:30 LONG  entry 80193.6 SL 79692.4 -> TRAIL_2R +2.00R  net Rs+102
+11-May 21:05 LONG  entry 81242.3 SL 80544.8 -> SL -1.00R  net Rs-88
+15-May 05:50 LONG  entry 81400.2 SL 81096.2 -> SL -1.00R  net Rs-44
+18-May 03:10 LONG  entry 78391.9 SL 78190.6 -> SL -1.00R  net Rs-34
+22-May 04:20 SHORT entry 77581.4 SL 77777.2 -> SL -1.00R  net Rs-34
+24-May 22:50 LONG  entry 76619.5 SL 76343.7 -> SL -1.00R  net Rs-43
+29-May 04:20 SHORT entry 73492.1 SL 73932.2 -> TRAIL_2R +2.00R  net Rs+97
+04-Jun 15:30 SHORT entry 63018.7 SL 63727.6 -> SL -1.00R  net Rs-112
+06-Jun 05:50 SHORT entry 61122.1 SL 61934.8 -> TRAIL_2R +2.00R  net Rs+228
+09-Jun 19:00 SHORT entry 62273.9 SL 62868.2 -> TRAIL_2R +2.00R  net Rs+161
+16-Jun 18:50 SHORT entry 66134.2 SL 66599.2 -> TRAIL_2R +2.00R  net Rs+116
+17-Jun 16:30 SHORT entry 64681.5 SL 65029.1 -> SL -1.00R  net Rs-59
+19-Jun 09:00 SHORT entry 62708.2 SL 63088.0 -> SL -1.00R  net Rs-65
+20-Jun 04:45 LONG  entry 63278.5 SL 63066.9 -> TRAIL_2R +2.00R  net Rs+49
+21-Jun 11:10 SHORT entry 64269.6 SL 64456.2 -> TRAIL_2R +2.00R  net Rs+42
+30-Jun 01:30 LONG  entry 60484.3 SL 60254.0 -> SL -1.00R  net Rs-45
+01-Jul 03:10 SHORT entry 58560.3 SL 58839.8 -> TRAIL_2R +2.00R  net Rs+75
+03-Jul 15:05 SHORT entry 61559.3 SL 61875.3 -> SL -1.00R  net Rs-57
+06-Jul 13:25 LONG  entry 63064.5 SL 62863.9 -> SL -1.00R  net Rs-39
+07-Jul 21:00 LONG  entry 63731.3 SL 62638.0 -> SL -1.00R  net Rs-165
+08-Jul 18:40 SHORT entry 61892.3 SL 62393.5 -> SL -1.00R  net Rs-84
+12-Jul 10:15 SHORT entry 63964.2 SL 64238.0 -> SL -1.00R  net Rs-49
+14-Jul 20:45 LONG  entry 64294.8 SL 63613.1 -> SL -1.00R  net Rs-106
+24-Jul 03:05 SHORT entry 65048.8 SL 65183.1 -> SL -1.00R  net Rs-29
+24-Jul 17:35 LONG  entry 65055.2 SL 64821.9 -> SL -1.00R  net Rs-43
+26-Jul 17:50 LONG  entry 64547.7 SL 64470.0 -> SL -1.00R  net Rs-22
+27-Jul 15:45 LONG  entry 65250.2 SL 65066.3 -> SL -1.00R  net Rs-36
+28-Jul 19:45 SHORT entry 62953.9 SL 63568.6 -> SL -1.00R  net Rs-99
+28-Jul 23:20 SHORT entry 63589.9 SL 63970.1 -> SL -1.00R  net Rs-65
+29-Jul 19:25 LONG  entry 64634.6 SL 64113.6 -> SL -1.00R  net Rs-83
+31-Jul 04:10 LONG  entry 64887.4 SL 64636.3 -> TRAIL_2R +2.00R  net Rs+59
+31-Jul 06:55 LONG  entry 65160.1 SL 64698.5 -> SL -1.00R  net Rs-75
+04-Aug 01:45 LONG  entry 63940.9 SL 63735.0 -> SL -1.00R  net Rs-40
+10-Aug 11:30 LONG  entry 65159.4 SL 64892.1 -> SL -1.00R  net Rs-48
+11-Aug 18:30 SHORT entry 64274.4 SL 64445.0 -> TRAIL_2R +2.00R  net Rs+37
+14-Aug 09:00 SHORT entry 63405.2 SL 63595.0 -> TRAIL_2R +2.00R  net Rs+43
+14-Aug 23:55 SHORT entry 63003.7 SL 63194.6 -> SL -1.00R  net Rs-38
+19-Aug 09:20 SHORT entry 64305.9 SL 64390.4 -> TRAIL_2R +2.00R  net Rs+13
+22-Aug 08:05 LONG  entry 78397.8 SL 77763.0 -> SL -1.00R  net Rs-84
+24-Aug 18:55 LONG  entry 78988.8 SL 77950.0 -> SL -1.00R  net Rs-129
+24-Aug 20:35 LONG  entry 79561.0 SL 77800.0 -> SL -1.00R  net Rs-210
+27-Aug 19:45 LONG  entry 79668.5 SL 79016.0 -> TRAIL_2R +2.00R  net Rs+137
+04-Sep 18:10 SHORT entry 79653.0 SL 81324.2 -> TRAIL_2R +2.00R  net Rs+367
+13-Sep 02:55 LONG  entry 77172.7 SL 77084.1 -> SL -1.00R  net Rs-21
+13-Sep 13:05 SHORT entry 77077.2 SL 77291.2 -> TRAIL_2R +2.00R  net Rs+39
+14-Sep 01:30 SHORT entry 77248.5 SL 77381.5 -> SL -1.00R  net Rs-26
+15-Sep 02:00 LONG  entry 79420.7 SL 78933.5 -> SL -1.00R  net Rs-66
+15-Sep 16:25 LONG  entry 77023.7 SL 76839.5 -> SL -1.00R  net Rs-32
+17-Sep 18:30 LONG  entry 76820.0 SL 76210.3 -> SL -1.00R  net Rs-82
+18-Sep 06:45 LONG  entry 76551.2 SL 76309.4 -> TRAIL_2R +2.00R  net Rs+46
+18-Sep 10:35 LONG  entry 77456.8 SL 77188.0 -> TRAIL_2R +2.00R  net Rs+52
+19-Sep 06:50 LONG  entry 81278.8 SL 80802.6 -> SL -1.00R  net Rs-64
+21-Sep 23:05 LONG  entry 85852.7 SL 85562.1 -> TRAIL_2R +2.00R  net Rs+50
+22-Sep 14:35 LONG  entry 85805.0 SL 85239.3 -> TRAIL_2R +2.00R  net Rs+108
+01-Oct 04:10 LONG  entry 83775.2 SL 83569.9 -> SL -1.00R  net Rs-33
+01-Oct 19:15 SHORT entry 83631.5 SL 84029.6 -> SL -1.00R  net Rs-54
+02-Oct 01:05 SHORT entry 84605.9 SL 85139.2 -> SL -1.00R  net Rs-68
+02-Oct 18:15 LONG  entry 86632.2 SL 86328.7 -> SL -1.00R  net Rs-42
+04-Oct 21:15 LONG  entry 85303.9 SL 85052.8 -> TRAIL_2R +2.00R  net Rs+42
+11-Oct 10:30 LONG  entry 83016.3 SL 82751.1 -> TRAIL_3R +3.00R  net Rs+76
+13-Oct 15:10 SHORT entry 83567.0 SL 84134.2 -> TRAIL_2R +2.00R  net Rs+111
+17-Oct 08:25 SHORT entry 81444.0 SL 81589.7 -> SL -1.00R  net Rs-27
+19-Oct 13:30 SHORT entry 82630.0 SL 83109.2 -> TRAIL_2R +2.00R  net Rs+94
+23-Oct 19:00 LONG  entry 81745.9 SL 81411.0 -> SL -1.00R  net Rs-48
+
+Notes: entry assumed at signal-bar close (live uses a market order, so real fills differ by slippage); stop is checked before target inside the same candle; past results do not guarantee future results.
