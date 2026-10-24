@@ -18,6 +18,7 @@ from app.strategy_live import scan_signals
 PAIR = "B-BTC_USDT"
 DAYS = int(os.getenv("BACKTEST_DAYS", "10"))
 WARMUP_DAYS = 3
+MAX_TRADES_PER_DAY = int(os.getenv("MAX_TRADES_PER_DAY", "3"))
 NOTIONAL_INR = float(os.getenv("MARGIN_INR", "300")) * float(os.getenv("LEVERAGE", "30"))
 FEE_PCT = float(os.getenv("BACKTEST_FEE_PCT", "0.06"))  # assumed taker fee per side, % of notional
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -36,7 +37,7 @@ def fetch_range(resolution, seconds_per, total_seconds, end):
         if len(out) == before:
             break
         cursor = int(min(out)) // 1000 - 1
-        time.sleep(0.3)
+        time.sleep(0.15)
     return [out[k] for k in sorted(out)]
 
 
@@ -73,8 +74,14 @@ def main():
     start_ms = (end - DAYS * 86400) * 1000
     signals = [s for s in scan_signals(c5, c1) if s.bar_time >= start_ms]
     rows, equity = [], 0.0
+    busy_until, per_day = 0, {}
     for s in signals:
+        day = datetime.fromtimestamp(s.bar_time / 1000, IST).date()
+        if s.bar_time <= busy_until or per_day.get(day, 0) >= MAX_TRADES_PER_DAY:
+            continue  # live bot holds one position at a time and caps trades per day
         r, exit_ts, how = simulate(s, c5)
+        busy_until = exit_ts
+        per_day[day] = per_day.get(day, 0) + 1
         gross = r * (abs(s.entry - s.stop) / s.entry) * NOTIONAL_INR
         fees = 2 * FEE_PCT / 100 * NOTIONAL_INR
         net = gross - fees
@@ -100,13 +107,21 @@ def main():
         for x in rows:
             run += x["net_inr"]; peak = max(peak, run); dd = max(dd, peak - run)
         lines.append(f"Max drawdown (net): Rs{dd:.0f}")
+    if rows:
+        monthly = {}
+        for x in rows:
+            m = x["signal_time_ist"][3:6] if False else datetime.strptime(x["signal_time_ist"], "%d-%b %H:%M").strftime("%b")
+            a = monthly.setdefault(m, [0, 0.0, 0.0]); a[0] += 1; a[1] += x["R"]; a[2] += x["net_inr"]
+        lines.append("By month: " + " | ".join(f"{m}: {a[0]} trades {a[1]:+.1f}R Rs{a[2]:+.0f}" for m, a in monthly.items()))
+        lg = sum(x["R"] for x in rows if x["R"] > 0); ls = -sum(x["R"] for x in rows if x["R"] < 0)
+        lines.append(f"Profit factor (R): {lg / ls:.2f}" if ls else "Profit factor: n/a (no losses)")
     lines.append("")
     lines += [f"{x['signal_time_ist']} {x['side']:5} entry {x['entry']} SL {x['stop']} -> {x['result']} {x['R']:+.2f}R  net Rs{x['net_inr']:+.0f}" for x in rows]
     lines += ["", "Notes: entry assumed at signal-bar close (live uses a market order, so real fills differ by slippage); stop is checked before target inside the same candle; past results do not guarantee future results."]
     out = Path("data"); out.mkdir(exist_ok=True)
-    (out / "backtest_10d.txt").write_text("\n".join(lines) + "\n")
+    (out / f"backtest_{DAYS}d.txt").write_text("\n".join(lines) + "\n")
     if rows:
-        with (out / "backtest_10d.csv").open("w", newline="") as f:
+        with (out / f"backtest_{DAYS}d.csv").open("w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
     print("\n".join(lines))
 
