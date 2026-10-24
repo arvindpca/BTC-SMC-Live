@@ -13,7 +13,7 @@ concurrency:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,6 +31,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/backtest_10d.txt data/backtest_10d.csv
+          git add -f data/backtest_*d.txt data/backtest_*d.csv
           git commit -q -m "chore: backtest result" || exit 0
           git pull -q --rebase origin main; git push -q origin HEAD:main
