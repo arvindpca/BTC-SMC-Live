@@ -1,5 +1,5 @@
 name: SMC V2 Backtest (read-only research)
-# Public CoinDCX candles only. No secrets, no orders, no writes to the repo. Runs only on this research branch.
+# Public CoinDCX candles only. No secrets, no orders. Commits small result files ONLY to this research branch (never main).
 on:
   push:
     branches: [smc-v2-backtest]
@@ -8,7 +8,7 @@ on:
       - ".github/workflows/smc-v2-backtest.yml"
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: smc-v2-backtest
   cancel-in-progress: true
@@ -45,3 +45,20 @@ jobs:
             smc_v2_backtest/OUT_STRICT
             smc_v2_backtest/OUT_FILL80
             smc_v2_backtest/*.txt
+      - name: Commit result summaries and data to THIS research branch only
+        if: always()
+        working-directory: .
+        run: |
+          mkdir -p smc_v2_backtest/results/data
+          cp smc_v2_backtest/fetch.txt smc_v2_backtest/run_*.txt smc_v2_backtest/results/ 2>/dev/null || true
+          cp smc_v2_backtest/data_cache/*.csv smc_v2_backtest/results/data/ 2>/dev/null || true
+          for d in STRICT FILL80; do
+            mkdir -p smc_v2_backtest/results/$d
+            cp smc_v2_backtest/OUT_$d/0*.csv smc_v2_backtest/OUT_$d/*.png smc_v2_backtest/results/$d/ 2>/dev/null || true
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f smc_v2_backtest/results
+          git commit -q -m "chore: SMC V2 backtest results" || exit 0
+          git pull -q --rebase origin smc-v2-backtest || true
+          git push -q origin HEAD:smc-v2-backtest
