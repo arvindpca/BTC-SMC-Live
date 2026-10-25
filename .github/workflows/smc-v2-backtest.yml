@@ -1,0 +1,47 @@
+name: SMC V2 Backtest (read-only research)
+# Public CoinDCX candles only. No secrets, no orders, no writes to the repo. Runs only on this research branch.
+on:
+  push:
+    branches: [smc-v2-backtest]
+    paths:
+      - "smc_v2_backtest/**"
+      - ".github/workflows/smc-v2-backtest.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: smc-v2-backtest
+  cancel-in-progress: true
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: smc_v2_backtest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas requests matplotlib
+      - name: Fetch CoinDCX futures 15m candles (public)
+        run: python -u coindcx_fetch.py --days 730 2>&1 | tee fetch.txt
+      - name: SMC V2 backtest - strict 24H POC rule (image rule)
+        run: python -u crypto_smc_v2.py --data-dir data_cache --symbols BTCUSDT PAXGUSDT --out OUT_STRICT 2>&1 | tee run_strict.txt
+      - name: SMC V2 backtest - POC window min fill 0.8
+        run: python -u crypto_smc_v2.py --data-dir data_cache --symbols BTCUSDT PAXGUSDT --poc-min-fill 0.8 --out OUT_FILL80 2>&1 | tee run_fill80.txt
+      - name: Job summary
+        if: always()
+        run: |
+          for f in fetch.txt run_strict.txt run_fill80.txt; do
+            [ -f "$f" ] && { echo "### $f"; echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smc-v2-results
+          path: |
+            smc_v2_backtest/OUT_STRICT
+            smc_v2_backtest/OUT_FILL80
+            smc_v2_backtest/*.txt
