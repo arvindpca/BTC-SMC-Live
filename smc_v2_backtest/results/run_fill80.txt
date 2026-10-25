@@ -1,0 +1,56 @@
+  symbol  rows               start                 end  missing_candles                 source
+ BTCUSDT 70044 2024-10-25 19:00:00 2026-10-25 18:45:00               36  BTCUSDT_15m_cache.csv
+PAXGUSDT 55398 2025-03-27 11:30:00 2026-10-25 18:45:00               24 PAXGUSDT_15m_cache.csv
+
+SMC setups dhoond raha hoon (har coin 20-60 second)...
+BTCUSDT: 335 raw SMC setups | BTC-trend ok 86 | coin-HTF ok 216 | POC ok 232
+PAXGUSDT: 256 raw SMC setups | BTC-trend ok 50 | coin-HTF ok 176 | POC ok 175
+
+Period 2024-10-25 -> 2026-10-25 (24.0 mahine) | TRAIN/TEST cut 2026-01-06 | fee 0.075% | risk 0.5% | min stop 0.3% | lev cap 5x
+
+===== 20 VARIANTS (fee 0.075%) -- PF full-period se sorted =====
+                    variant  trades  win_pct   pf  exp_R  net_return_pct  max_dd_pct  pf_train  pf_test  test_trades  pf_fee_hi  coins_pf_gt1
+         POC_ONLY__FIXED_2R     241    34.44 0.61  -0.30          -30.73      -33.67      0.55     0.73           97       0.53             0
+         POC_ONLY__FIXED_3R     237    29.11 0.60  -0.31          -31.48      -33.26      0.48     0.85           96       0.53             0
+         POC_ONLY__TRAILING     245    43.67 0.58  -0.26          -27.28      -30.29      0.52     0.70          101       0.49             0
+  NO_TREND_NO_POC__FIXED_2R     337    32.34 0.56  -0.36          -45.91      -49.04      0.54     0.61          136       0.50             0
+       POC_ONLY__FIXED_1.5R     244    38.11 0.56  -0.32          -32.60      -34.33      0.48     0.71          100       0.48             0
+           POC_ONLY__HYBRID     245    48.57 0.55  -0.27          -28.47      -29.82      0.50     0.65          101       0.46             0
+  NO_TREND_NO_POC__TRAILING     354    40.96 0.53  -0.32          -43.22      -46.60      0.48     0.62          146       0.44             0
+  NO_TREND_NO_POC__FIXED_3R     330    26.36 0.52  -0.41          -49.35      -50.68      0.44     0.69          132       0.46             0
+NO_TREND_NO_POC__FIXED_1.5R     344    36.05 0.51  -0.38          -48.21      -49.85      0.47     0.60          140       0.44             0
+    NO_TREND_NO_POC__HYBRID     354    45.76 0.49  -0.33          -44.90      -46.26      0.46     0.56          146       0.41             0
+          BTC_POC__FIXED_3R      64    25.00 0.48  -0.47          -14.05      -15.18      0.36     0.66           30       0.44             0
+      ALL_FILTERS__FIXED_3R      64    25.00 0.48  -0.47          -14.05      -15.18      0.36     0.66           30       0.44             0
+    ALL_FILTERS__FIXED_1.5R      66    34.85 0.45  -0.44          -13.50      -14.00      0.34     0.61           31       0.40             0
+        BTC_POC__FIXED_1.5R      66    34.85 0.45  -0.44          -13.50      -14.00      0.34     0.61           31       0.40             0
+          BTC_POC__FIXED_2R      65    27.69 0.41  -0.52          -15.55      -16.25      0.40     0.43           30       0.37             0
+      ALL_FILTERS__FIXED_2R      65    27.69 0.41  -0.52          -15.55      -16.25      0.40     0.43           30       0.37             0
+            BTC_POC__HYBRID      67    44.78 0.39  -0.42          -13.18      -13.55      0.29     0.53           32       0.33             0
+        ALL_FILTERS__HYBRID      67    44.78 0.39  -0.42          -13.18      -13.55      0.29     0.53           32       0.33             0
+      ALL_FILTERS__TRAILING      67    37.31 0.37  -0.45          -14.04      -14.48      0.24     0.54           32       0.31             0
+          BTC_POC__TRAILING      67    37.31 0.37  -0.45          -14.04      -14.48      0.24     0.54           32       0.31             0
+
+--- Filter ka asar (median) ---
+                   pf  pf_test
+filters                       
+ALL_FILTERS      0.41     0.54
+BTC_POC          0.41     0.54
+NO_TREND_NO_POC  0.52     0.61
+POC_ONLY         0.58     0.71
+
+--- Exit ka asar (median) ---
+              pf  pf_test
+exit                     
+FIXED_1.5R  0.48     0.61
+FIXED_2R    0.49     0.52
+FIXED_3R    0.50     0.68
+HYBRID      0.44     0.55
+TRAILING    0.45     0.58
+
+===== VERDICT =====
+Koi variant TEST period me fee 0.10% par nahi chala (PF>=1.15, 60+ trades, 2+ coins).
+Matlab is dor me ye SMC V2 crypto version fees ke baad bharosemand edge nahi dikha raha.
+
+Output folder: OUT_FILL80  (00_DATA_MANIFEST, 01_VARIANT_SUMMARY, trades_*.csv, charts)
+Dhyan: SMC ke pieces (sweep/MSS/FVG/OB) ki definitions meri hain; funding rate aur liquidation ignore hain.

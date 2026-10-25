@@ -1,0 +1,3 @@
+symbol,rows,start,end,missing_candles,source
+BTCUSDT,70044,2024-10-25 19:00:00,2026-10-25 18:45:00,36,BTCUSDT_15m_cache.csv
+PAXGUSDT,55398,2025-03-27 11:30:00,2026-10-25 18:45:00,24,PAXGUSDT_15m_cache.csv

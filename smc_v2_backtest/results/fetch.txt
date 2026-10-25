@@ -1,0 +1,11 @@
+=== CoinDCX active futures instruments (PAXG / BTC) ===
+USDT margin: 503 instruments | BTC: ['B-BTC_USDT'] | PAXG: ['B-PAXG_USDT']
+INR margin: 503 instruments | BTC: ['B-BTC_USDT'] | PAXG: ['B-PAXG_USDT']
+
+=== B-BTC_USDT -> BTCUSDT_15m_cache.csv (last 730 days) ===
+  B-BTC_USDT res=15: HTTP 200 status=ok
+  70044 candles | 2024-10-25 19:00:00 -> 2026-10-25 18:45:00 UTC | missing 36 (0.1%)
+
+=== B-PAXG_USDT -> PAXGUSDT_15m_cache.csv (last 730 days) ===
+  B-PAXG_USDT res=15: HTTP 200 status=ok
+  55398 candles | 2025-03-27 11:30:00 -> 2026-10-25 18:45:00 UTC | missing 24 (0.0%)
