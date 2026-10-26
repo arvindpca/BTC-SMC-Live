@@ -1,0 +1,27 @@
+name: Clock (paper-trading.yml auto-run)
+
+# GitHub ka cron time pe nahi chalta tha. Ye clock 24x7 time pe paper-trading.yml chalata hai.
+# 340 min chal ke khud agla clock start karta hai. Cron sirf backup restart hai.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 */3 * * *"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: clock
+  cancel-in-progress: false
+
+jobs:
+  clock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run clock
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python clock/clock.py paper-trading.yml 5 0 340
