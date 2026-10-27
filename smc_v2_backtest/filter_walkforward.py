@@ -30,7 +30,7 @@ def build(path):
         if fs<=ft and fs<10**9: px=stop
         elif ft<10**9: px=tp
         else: px=c[jend]
-        rows.append(dict(date=pd.to_datetime(int(dates[s]),unit="D"),ret=side*(px-entry)/entry*100,
+        rows.append(dict(date=pd.to_datetime(int(dates[s]),unit="D"),ret=side*(px-entry)/entry*100,dist=dist/entry*100,
                          vol_ratio=vol[j]/vma[j] if vma[j]>0 else np.nan, adx=adx[j]))
     return pd.DataFrame(rows)
 COST=0.11   # % round trip: maker 0.05 + slippage 0.06
@@ -41,9 +41,10 @@ def stat(x):
 CAND={"base (no filter)":lambda f:np.ones(len(f),bool),
  "vol<=1.5":lambda f:f.vol_ratio<=1.5,"vol<=2.0":lambda f:f.vol_ratio<=2.0,
  "adx>=20":lambda f:f.adx>=20,"vol<=2.0 & adx>=20":lambda f:(f.vol_ratio<=2.0)&(f.adx>=20)}
-for name,path in [("PAXG","results/data/PAXGUSDT_15m_cache.csv"),("BTC","results/data/BTCUSDT_15m_cache.csv")]:
-    f=build(path); f["net"]=f.ret-COST; n=len(f); k=int(n*0.6)
-    print(f"\n=== {name}: {n} trades {f.date.min().date()} -> {f.date.max().date()} (maker+slip {COST}% round trip) ===")
-    for cn,fn in CAND.items():
-        mk=np.asarray(fn(f))
-        print(f"{cn:22s} TRAIN {stat(f.net[:k][mk[:k]].values)} | TEST {stat(f.net[k:][mk[k:]].values)}")
+if __name__=="__main__":
+  for name,path in [("PAXG","results/data/PAXGUSDT_15m_cache.csv"),("BTC","results/data/BTCUSDT_15m_cache.csv")]:
+      f=build(path); f["net"]=f.ret-COST; n=len(f); k=int(n*0.6)
+      print(f"\n=== {name}: {n} trades {f.date.min().date()} -> {f.date.max().date()} (maker+slip {COST}% round trip) ===")
+      for cn,fn in CAND.items():
+          mk=np.asarray(fn(f))
+          print(f"{cn:22s} TRAIN {stat(f.net[:k][mk[:k]].values)} | TEST {stat(f.net[k:][mk[k:]].values)}")
