@@ -1,0 +1,30 @@
+name: Fetch PAXG 5m candles (read-only research)
+on:
+  push:
+    branches: [smc-v2-backtest]
+    paths: ["fetch5m/**", ".github/workflows/fetch5m.yml"]
+permissions:
+  contents: write
+concurrency:
+  group: fetch5m
+  cancel-in-progress: true
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests pandas
+      - run: python -u fetch5m/fetch5m.py 580 2>&1 | tee fetch5m/results_log.txt
+      - name: Commit data to this research branch only
+        run: |
+          mkdir -p fetch5m/results; cp fetch5m/results_log.txt fetch5m/results/ || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f fetch5m/results
+          git commit -q -m "chore: PAXG 5m candles" || exit 0
+          git pull -q --rebase origin smc-v2-backtest || true
+          git push -q origin HEAD:smc-v2-backtest
