@@ -1,12 +1,12 @@
 {
  "live_from_ms": 1793127442000,
- "last_ts": 1793125800000,
+ "last_ts": 1793126700000,
  "day": "2026-10-27",
  "day_done": true,
  "day_note": "signal seen before the paper trader was running - skipped",
  "pending": null,
  "pos": null,
- "daily_sent": "",
+ "daily_sent": "2026-10-27",
  "n_closed": 0,
  "started": "2026-10-27 18:57 UTC"
 }
