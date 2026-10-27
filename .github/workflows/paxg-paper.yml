@@ -1,0 +1,61 @@
+name: PAXG S1 Paper Trader (educational, paper only - no orders)
+
+# EDUCATIONAL PURPOSE ONLY. Paper trading with public CoinDCX candles. No API keys, no orders, no real money.
+# Not financial advice. One long job loops ~5h40m (a cycle every 15 min at :02/:17/:32/:47 UTC), then starts its
+# successor. Cron is only a safety net that restarts the chain. State/journal live on branch `paxg-paper-state`
+# (never on main), so this workflow does not touch the existing BTC workflows.
+#
+# Optional Telegram alerts: repo secrets TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.
+# Optional variables: PAXG_PAPER_CAPITAL_INR (default 3000), PAXG_PAPER_LEVERAGE (default 10), PAXG_PAPER_USDINR (default 88).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "paxg_paper/**"
+      - ".github/workflows/paxg-paper.yml"
+  schedule:
+    - cron: "11 * * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: paxg-paper-trader
+  cancel-in-progress: false
+
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      PYTHONUNBUFFERED: "1"
+      PAXG_PAIR: B-PAXG_USDT
+      PAXG_PAPER_CAPITAL_INR: ${{ vars.PAXG_PAPER_CAPITAL_INR || '3000' }}
+      PAXG_PAPER_LEVERAGE: ${{ vars.PAXG_PAPER_LEVERAGE || '10' }}
+      PAXG_PAPER_USDINR: ${{ vars.PAXG_PAPER_USDINR || '88' }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests pandas numpy
+      - name: Load paper state (branch paxg-paper-state)
+        run: |
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$URL" paxg-paper-state >/dev/null 2>&1; then
+            git clone -q --branch paxg-paper-state "$URL" paper_state
+          else
+            mkdir paper_state && cd paper_state && git init -q -b paxg-paper-state && git remote add origin "$URL"
+          fi
+      - name: Run paper trader (paper only, no orders)
+        run: python -u -m paxg_paper.paper loop 340
+      - name: Start successor run
+        if: always()
+        run: gh workflow run paxg-paper.yml --ref main || true
