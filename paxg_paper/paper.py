@@ -6,7 +6,7 @@ Not financial advice. Backtests and paper results do not guarantee anything.
 Rules (same as the research backtest):
   * Asia range = high/low of 00:00-07:00 UTC, Mon-Fri, max 1 trade/day.
   * Trend = previous completed daily close vs daily EMA20 (above -> long only, below -> short only).
-  * Signal = first 15m CLOSE beyond the range in the trend direction, 07:00-12:00 UTC.
+  * Signal = first 5m CLOSE beyond the range in the trend direction, 07:00-12:00 UTC.
   * Direction confirmation (v2): last completed 4h close must agree with the trade side (4h close vs 4h EMA20) AND the
     signal candle must close at least 0.5 x ATR(14) beyond the range edge; otherwise the day is skipped.
   * Entry = open of the next candle (paper limit/maker fill). Stop = opposite side of the Asia range

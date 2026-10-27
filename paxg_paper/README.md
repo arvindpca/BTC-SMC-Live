@@ -10,7 +10,7 @@ paper-trades one rule set:
 
 1. Asia range = high/low of 00:00-07:00 UTC (Mon-Fri, max 1 trade/day).
 2. Trend: previous completed daily close vs daily EMA20 (above -> long only, below -> short only).
-3. Signal: first 15m close beyond the range in the trend direction between 07:00-12:00 UTC.
+3. Signal: first 5m close beyond the range in the trend direction between 07:00-12:00 UTC.
 4. Direction confirmation (v2): the last completed 4h close must agree with the side (4h close vs 4h EMA20), and the signal
    candle must close >= 0.5 x ATR(14) beyond the range edge; otherwise skip the day.
 5. Entry: open of the next candle (paper limit fill). Stop: opposite side of the range (skip if distance <0.3% or >3%).
