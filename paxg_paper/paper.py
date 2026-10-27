@@ -7,11 +7,12 @@ Rules (same as the research backtest):
   * Asia range = high/low of 00:00-07:00 UTC, Mon-Fri, max 1 trade/day.
   * Trend = previous completed daily close vs daily EMA20 (above -> long only, below -> short only).
   * Signal = first 15m CLOSE beyond the range in the trend direction, 07:00-12:00 UTC.
-  * Volume filter: signal-candle volume <= 1.5 x its 20-candle average, otherwise skip the day.
+  * Direction confirmation (v2): last completed 4h close must agree with the trade side (4h close vs 4h EMA20) AND the
+    signal candle must close at least 0.5 x ATR(14) beyond the range edge; otherwise the day is skipped.
   * Entry = open of the next candle (paper limit/maker fill). Stop = opposite side of the Asia range
-    (skip if 0.3% < distance < 3% is violated). Target = 1.5 x stop distance. Time exit = 16:00 UTC.
+    (skip if 0.3% < distance < 3% is violated). Target = 1.5 x stop distance. Time exit = 16:00 UTC. Runs on 5-minute candles.
 Usage:
-  python -m paxg_paper.paper loop 340      # run for N minutes, one cycle every 15 min (:02,:17,:32,:47)
+  python -m paxg_paper.paper loop 340      # run for N minutes, one cycle every 5 min (:02,:07,:12,...)
   python -m paxg_paper.paper once          # a single cycle
   python -m paxg_paper.paper replay FILE   # validate the logic on a CSV of 15m candles (no notifications)
 """
@@ -34,15 +35,17 @@ CAPITAL = float(os.getenv("PAXG_PAPER_CAPITAL_INR", "3000"))
 LEV = float(os.getenv("PAXG_PAPER_LEVERAGE", "10"))
 FX = float(os.getenv("PAXG_PAPER_USDINR", "88"))
 FEE, SLIP = 0.00025, 0.0003          # per side: maker fee + slippage (paper assumption)
-RR, VOL_MAX, MIN_D, MAX_D = 1.5, 1.5, 0.003, 0.03
+RR, K_ATR, MIN_D, MAX_D = 1.5, 0.5, 0.003, 0.03
+RES_MIN = 5                           # candle size in minutes (research backtest used 5m)
+LAST_M = 960 - RES_MIN                # minute-of-day of the last candle before the 16:00 UTC time exit
 STATE_DIR = os.getenv("PAXG_STATE_DIR", "paper_state")
 BASE = "https://public.coindcx.com/market_data/candlesticks"
-SEC = 900
+SEC = RES_MIN * 60
 MS = SEC * 1000
 DISCLAIMER = "📚 Educational paper trade only - not financial advice."
 TRADE_COLS = ["id", "side", "entry_time_utc", "exit_time_utc", "entry", "exit", "stop", "target", "reason",
               "qty_paxg", "notional_inr", "gross_usd_per_unit", "gross_inr", "cost_inr", "net_inr",
-              "gross_pct", "vol_ratio", "dist_pct"]
+              "gross_pct", "brk_atr", "dist_pct"]
 
 
 # ----------------------------------------------------------------------------- data
@@ -50,7 +53,7 @@ def fetch(from_s: int, to_s: int) -> pd.DataFrame:
     out, to = {}, to_s
     while to > from_s:
         frm = max(from_s, to - 500 * SEC)
-        r = requests.get(BASE, params={"pair": PAIR, "from": frm, "to": to, "resolution": "15", "pcode": "f"},
+        r = requests.get(BASE, params={"pair": PAIR, "from": frm, "to": to, "resolution": str(RES_MIN), "pcode": "f"},
                          timeout=20)
         j = r.json()
         if not isinstance(j, dict) or j.get("s") != "ok":
@@ -163,8 +166,8 @@ def entry_msg(p: dict) -> str:
             f"Target: {usd(p['tp'])} ({p['dist_pct'] * RR:.2f}% away, {RR}x stop)\n"
             f"Size  : {p['qty']:.4f} PAXG | ₹{CAPITAL * LEV:,.0f} notional ({LEV:g}x on ₹{CAPITAL:,.0f})\n"
             f"Risk at stop: {inr(-risk)} ({risk / CAPITAL * 100:.0f}% of capital) | Reward at target: {inr(rew)}\n"
-            f"Why: 15m close {brk} (Asia H {usd(p['rh'])} / L {usd(p['rl'])}) | daily trend "
-            f"{'UP' if p['side'] == 1 else 'DOWN'} (EMA20) | volume {p['vol_ratio']:.2f}x avg (<= {VOL_MAX})\n"
+            f"Why: {RES_MIN}m close {brk} (Asia H {usd(p['rh'])} / L {usd(p['rl'])}) | daily trend "
+            f"{'UP' if p['side'] == 1 else 'DOWN'} (EMA20) | 4h trend agrees | breakout {p['brk']:.2f} ATR beyond edge (>= {K_ATR})\n"
             f"⏱ Time exit: 16:00 UTC (9:30 PM IST) if stop/target not hit\n"
             f"Open positions: 1\n{DISCLAIMER}")
 
@@ -196,6 +199,23 @@ class Engine:
                 if len(d) >= 30 else 0
         return self.trend_cache[day]
 
+    @staticmethod
+    def atr(df: pd.DataFrame) -> np.ndarray:
+        c, h, l = df.close, df.high, df.low
+        pc = c.shift(1).fillna(c.iloc[0])
+        tr = pd.concat([h - l, (h - pc).abs(), (l - pc).abs()], axis=1).max(axis=1)
+        return tr.ewm(alpha=1 / 14, adjust=False).mean().values
+
+    def h4_sign(self, df: pd.DataFrame, ts_ms: int) -> int:
+        """Sign of (4h close - 4h EMA20) for the last COMPLETED 4h bar before the bar containing ts_ms."""
+        b = df.set_index(pd.to_datetime(df.ts, unit="ms"))[["open", "high", "low", "close"]].resample("4h").agg(
+            {"open": "first", "high": "max", "low": "min", "close": "last"}).dropna()
+        ema = b.close.ewm(span=20, adjust=False).mean()
+        prev = b.index[b.index < pd.Timestamp(ts_ms, unit="ms").floor("4h")]
+        if len(prev) < 30:
+            return 0
+        return int(np.sign(b.close[prev[-1]] - ema[prev[-1]]))
+
     def asia(self, day: str, a: dict):
         if day not in self.asia_cache:
             m = (a["day"] == day) & (a["mins"] < 420)
@@ -216,7 +236,7 @@ class Engine:
             return
         qty = CAPITAL * LEV / FX / o
         pos = dict(side=p["side"], entry=o, stop=stop, tp=o + p["side"] * RR * dist, entry_ts=ts, qty=qty,
-                   dist_pct=dist / o * 100, rh=p["rh"], rl=p["rl"], vol_ratio=p["vol"])
+                   dist_pct=dist / o * 100, rh=p["rh"], rl=p["rl"], brk=p["brk"])
         s["pos"], s["pending"] = pos, None
         s["day_note"] = f"{'LONG' if pos['side'] == 1 else 'SHORT'} open"
         self.events += 1
@@ -234,7 +254,7 @@ class Engine:
                    stop=round(p["stop"], 2), target=round(p["tp"], 2), reason=reason, qty_paxg=round(p["qty"], 6),
                    notional_inr=round(CAPITAL * LEV), gross_usd_per_unit=round(gross_u, 2), gross_inr=round(gross, 2),
                    cost_inr=round(cost, 2), net_inr=round(gross - cost, 2), gross_pct=round(gross_u / p["entry"] * 100, 4),
-                   vol_ratio=round(p["vol_ratio"], 3), dist_pct=round(p["dist_pct"], 3))
+                   brk_atr=round(p["brk"], 3), dist_pct=round(p["dist_pct"], 3))
         self.persist_trade(row)
         s["n_closed"] = s.get("n_closed", 0) + 1
         s["pos"] = None
@@ -249,7 +269,7 @@ class Engine:
         dt = pd.to_datetime(df.ts, unit="ms")
         a = dict(ts=ts_a, o=df.open.values, h=df.high.values, l=df.low.values, c=df.close.values,
                  v=df.volume.values, day=dt.dt.strftime("%Y-%m-%d").values, mins=(dt.dt.hour * 60 + dt.dt.minute).values,
-                 dow=dt.dt.dayofweek.values, vma=df.volume.rolling(20).mean().values)
+                 dow=dt.dt.dayofweek.values, atr=self.atr(df))
         closed = np.flatnonzero(ts_a + MS <= now_ms)
         for i in closed:
             ts = int(ts_a[i])
@@ -275,11 +295,11 @@ class Engine:
                     self._close(float(px), ts + MS, "STOP LOSS")
                 elif tp_hit:
                     self._close(p["tp"], ts + MS, "TARGET")
-                elif m >= 945:
+                elif m >= LAST_M:
                     self._close(float(a["c"][i]), ts + MS, "TIME EXIT 16:00 UTC")
             if (not s["pos"]) and (not s["pending"]) and (not s["day_done"]) and 420 <= m < 720:
                 rh, rl, n = self.asia(day, a)
-                if n < int(0.8 * 420 / 15):
+                if n < int(0.8 * 420 / RES_MIN):
                     s["day_done"], s["day_note"] = True, "Asia range data incomplete - skipped"
                 else:
                     tv = self.trend(day, df)
@@ -287,19 +307,21 @@ class Engine:
                     up, dn = (c > rh) and tv > 0, (c < rl) and tv < 0
                     if up or dn:
                         s["day_done"] = True
-                        vol = a["v"][i] / a["vma"][i] if a["vma"][i] and a["vma"][i] > 0 else float("nan")
-                        if not vol <= VOL_MAX:
-                            s["day_note"] = f"breakout seen but volume {vol:.2f}x > {VOL_MAX}x -> skipped (filter)"
+                        sd = 1 if up else -1
+                        brk = sd * (c - (rh if up else rl)) / a["atr"][i]
+                        if self.h4_sign(df, ts) != sd:
+                            s["day_note"] = "breakout seen but 4h trend disagrees -> skipped (filter)"
+                        elif not brk >= K_ATR:
+                            s["day_note"] = f"breakout only {brk:.2f} ATR beyond range (< {K_ATR}) -> skipped (filter)"
                         else:
-                            s["pending"] = dict(side=1 if up else -1, entry_ts=ts + MS, rh=float(rh), rl=float(rl),
-                                                vol=float(vol))
+                            s["pending"] = dict(side=sd, entry_ts=ts + MS, rh=float(rh), rl=float(rl), brk=float(brk))
                             s["day_note"] = "signal found, waiting for entry candle"
             if m == 720 and not s["day_done"] and not s["pos"] and not s["pending"]:
                 tv = self.trend(day, df)
                 s["day_done"] = True
                 s["day_note"] = ("daily trend flat/unknown - no trade" if tv == 0 else
                                  f"no trend-aligned ({'long' if tv > 0 else 'short'}) breakout by 12:00 UTC - no trade")
-            if m >= 945 and s["daily_sent"] != day and a["dow"][i] < 5 and ts + MS >= s["live_from_ms"]:
+            if m >= LAST_M and s["daily_sent"] != day and a["dow"][i] < 5 and ts + MS >= s["live_from_ms"]:
                 s["daily_sent"] = day
                 self.events += 1
                 self.emit(self.daily_msg(day))
@@ -398,8 +420,8 @@ def run_loop(minutes: int) -> None:
     s, first = load_state(now * 1000)
     eng = Engine(s)
     if first:
-        notify(f"🚀 PAXG S1 paper trader STARTED ({PAIR}, 15m)\nPaper capital ₹{CAPITAL:,.0f} x {LEV:g}x = ₹{CAPITAL * LEV:,.0f} per trade.\n"
-               f"Rules: Asia-range breakout 07:00-12:00 UTC, daily EMA20 trend, volume <= {VOL_MAX}x, stop = opposite side of range, "
+        notify(f"🚀 PAXG S1 paper trader STARTED ({PAIR}, {RES_MIN}m)\nPaper capital ₹{CAPITAL:,.0f} x {LEV:g}x = ₹{CAPITAL * LEV:,.0f} per trade.\n"
+               f"Rules: Asia-range breakout 07:00-12:00 UTC, daily EMA20 + 4h trend agree, breakout >= {K_ATR} ATR, stop = opposite side of range, "
                f"target {RR}x stop, time exit 16:00 UTC.\n{DISCLAIMER}")
     end, last_commit = time.time() + minutes * 60, 0.0
     while True:
@@ -407,8 +429,8 @@ def run_loop(minutes: int) -> None:
         if changed or time.time() - last_commit > 3600:
             commit_state("paper: update status/journal")
             last_commit = time.time()
-        # sleep to the next :02/:17/:32/:47
-        nxt = (int(time.time()) // 900 + 1) * 900 + 120
+        # sleep to the next 5-minute boundary + 2 min
+        nxt = (int(time.time()) // SEC + 1) * SEC + 120
         if nxt > end:
             break
         time.sleep(max(1, nxt - time.time()))
