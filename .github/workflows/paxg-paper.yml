@@ -2,11 +2,13 @@ name: PAXG S1 Paper Trader (educational, paper only - no orders)
 
 # EDUCATIONAL PURPOSE ONLY. Paper trading with public CoinDCX candles. No API keys, no orders, no real money.
 # Not financial advice. One long job loops ~5h40m (a cycle every 15 min at :02/:17/:32/:47 UTC), then starts its
-# successor. Cron is only a safety net that restarts the chain. State/journal live on branch `paxg-paper-state`
-# (never on main), so this workflow does not touch the existing BTC workflows.
+# successor. Cron is only a safety net that restarts the chain. Two strategy profiles run in parallel (matrix):
+#   v1 = 15m, daily EMA20 + volume<=1.5x   -> state branch `paxg-paper-state`
+#   v2 = 5m, daily EMA20 + 4h agree + 0.5 ATR breakout -> state branch `paxg-paper-state-v2`
+# State/journal never go to main, so this workflow does not touch the existing BTC workflows.
 #
 # Optional Telegram alerts: repo secrets TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.
-# Optional variables: PAXG_PAPER_CAPITAL_INR (default 3000), PAXG_PAPER_LEVERAGE (default 10), PAXG_PAPER_USDINR (default 88).
+# Optional variables: PAXG_PAPER_CAPITAL_INR (default 3000), PAXG_PAPER_LEVERAGE (default 30), PAXG_PAPER_USDINR (default 88).
 on:
   workflow_dispatch:
   push:
@@ -29,11 +31,17 @@ jobs:
   paper:
     runs-on: ubuntu-latest
     timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [v1, v2]
     env:
+      PAXG_PROFILE: ${{ matrix.profile }}
+      PAXG_STATE_BRANCH: ${{ matrix.profile == 'v1' && 'paxg-paper-state' || 'paxg-paper-state-v2' }}
       PYTHONUNBUFFERED: "1"
       PAXG_PAIR: B-PAXG_USDT
       PAXG_PAPER_CAPITAL_INR: ${{ vars.PAXG_PAPER_CAPITAL_INR || '3000' }}
-      PAXG_PAPER_LEVERAGE: ${{ vars.PAXG_PAPER_LEVERAGE || '10' }}
+      PAXG_PAPER_LEVERAGE: ${{ vars.PAXG_PAPER_LEVERAGE || '30' }}
       PAXG_PAPER_USDINR: ${{ vars.PAXG_PAPER_USDINR || '88' }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -49,13 +57,19 @@ jobs:
       - name: Load paper state (branch paxg-paper-state)
         run: |
           URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code --heads "$URL" paxg-paper-state >/dev/null 2>&1; then
-            git clone -q --branch paxg-paper-state "$URL" paper_state
+          if git ls-remote --exit-code --heads "$URL" "$PAXG_STATE_BRANCH" >/dev/null 2>&1; then
+            git clone -q --branch "$PAXG_STATE_BRANCH" "$URL" paper_state
           else
-            mkdir paper_state && cd paper_state && git init -q -b paxg-paper-state && git remote add origin "$URL"
+            mkdir paper_state && cd paper_state && git init -q -b "$PAXG_STATE_BRANCH" && git remote add origin "$URL"
           fi
       - name: Run paper trader (paper only, no orders)
         run: python -u -m paxg_paper.paper loop 340
+  next:
+    needs: paper
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
       - name: Start successor run
-        if: always()
-        run: gh workflow run paxg-paper.yml --ref main || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run paxg-paper.yml --ref main -R "$GITHUB_REPOSITORY" || true

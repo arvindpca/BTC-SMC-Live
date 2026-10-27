@@ -4,6 +4,11 @@
 It is not financial advice, and backtest/paper results do not guarantee any future result.
 Leveraged futures can lose all capital.
 
+## Two strategies run side by side
+* **v1** (15m): daily EMA20 trend + signal-candle volume <= 1.5x average. State: branch `paxg-paper-state`.
+* **v2** (5m): daily EMA20 + 4h trend agrees + breakout >= 0.5 ATR. State: branch `paxg-paper-state-v2`.
+Every Telegram message starts with the tag `[v1]` or `[v2]`.
+
 ## What it does
 Every 5 minutes (GitHub Actions, `.github/workflows/paxg-paper.yml`) it reads public CoinDCX `B-PAXG_USDT` 5m candles and
 paper-trades one rule set:
@@ -16,7 +21,7 @@ paper-trades one rule set:
 5. Entry: open of the next candle (paper limit fill). Stop: opposite side of the range (skip if distance <0.3% or >3%).
    Target: 1.5x stop distance. Time exit: 16:00 UTC.
 
-Paper costs: maker 0.025% + 0.03% slippage per side. Defaults: paper capital Rs 3,000 x 10x leverage, USD/INR 88
+Paper costs: maker 0.025% + 0.03% slippage per side. Defaults: paper capital Rs 3,000 x 30x leverage, USD/INR 88
 (change via repo *variables* `PAXG_PAPER_CAPITAL_INR`, `PAXG_PAPER_LEVERAGE`, `PAXG_PAPER_USDINR`).
 
 ## Where to see results

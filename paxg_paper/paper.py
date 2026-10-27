@@ -32,11 +32,17 @@ import requests
 
 PAIR = os.getenv("PAXG_PAIR", "B-PAXG_USDT")
 CAPITAL = float(os.getenv("PAXG_PAPER_CAPITAL_INR", "3000"))
-LEV = float(os.getenv("PAXG_PAPER_LEVERAGE", "10"))
+LEV = float(os.getenv("PAXG_PAPER_LEVERAGE", "30"))
 FX = float(os.getenv("PAXG_PAPER_USDINR", "88"))
 FEE, SLIP = 0.00025, 0.0003          # per side: maker fee + slippage (paper assumption)
-RR, K_ATR, MIN_D, MAX_D = 1.5, 0.5, 0.003, 0.03
-RES_MIN = 5                           # candle size in minutes (research backtest used 5m)
+RR, K_ATR, VOL_MAX, MIN_D, MAX_D = 1.5, 0.5, 1.5, 0.003, 0.03
+# Two strategy profiles run side by side (separate jobs, separate state branches):
+#   v1: 15m candles, daily EMA20 trend + signal-candle volume <= 1.5x avg        (first research version)
+#   v2: 5m candles,  daily EMA20 + 4h trend agree + breakout >= 0.5 ATR          (trend-confirmation research)
+PROFILE = os.getenv("PAXG_PROFILE", "v2")
+RES_MIN, USE_VOL = (15, True) if PROFILE == "v1" else (5, False)   # candle size in minutes
+TAG = f"[{PROFILE}]"
+STATE_BRANCH = os.getenv("PAXG_STATE_BRANCH", "paxg-paper-state")
 LAST_M = 960 - RES_MIN                # minute-of-day of the last candle before the 16:00 UTC time exit
 STATE_DIR = os.getenv("PAXG_STATE_DIR", "paper_state")
 BASE = "https://public.coindcx.com/market_data/candlesticks"
@@ -45,7 +51,7 @@ MS = SEC * 1000
 DISCLAIMER = "📚 Educational paper trade only - not financial advice."
 TRADE_COLS = ["id", "side", "entry_time_utc", "exit_time_utc", "entry", "exit", "stop", "target", "reason",
               "qty_paxg", "notional_inr", "gross_usd_per_unit", "gross_inr", "cost_inr", "net_inr",
-              "gross_pct", "brk_atr", "dist_pct"]
+              "gross_pct", "vol_ratio", "brk_atr", "dist_pct"]
 
 
 # ----------------------------------------------------------------------------- data
@@ -87,6 +93,7 @@ def inr(x): return f"{'+' if x >= 0 else '-'}₹{abs(x):,.0f}"
 
 
 def notify(text: str) -> None:
+    text = f"{TAG} {text}"
     print(text, flush=True)
     tok, chat = os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("TELEGRAM_CHAT_ID")
     if not tok or not chat:
@@ -167,7 +174,9 @@ def entry_msg(p: dict) -> str:
             f"Size  : {p['qty']:.4f} PAXG | ₹{CAPITAL * LEV:,.0f} notional ({LEV:g}x on ₹{CAPITAL:,.0f})\n"
             f"Risk at stop: {inr(-risk)} ({risk / CAPITAL * 100:.0f}% of capital) | Reward at target: {inr(rew)}\n"
             f"Why: {RES_MIN}m close {brk} (Asia H {usd(p['rh'])} / L {usd(p['rl'])}) | daily trend "
-            f"{'UP' if p['side'] == 1 else 'DOWN'} (EMA20) | 4h trend agrees | breakout {p['brk']:.2f} ATR beyond edge (>= {K_ATR})\n"
+            f"{'UP' if p['side'] == 1 else 'DOWN'} (EMA20) | " + (
+                f"volume {p['vol_ratio']:.2f}x avg (<= {VOL_MAX})\n" if USE_VOL else
+                f"4h trend agrees | breakout {p['brk']:.2f} ATR beyond edge (>= {K_ATR})\n") +
             f"⏱ Time exit: 16:00 UTC (9:30 PM IST) if stop/target not hit\n"
             f"Open positions: 1\n{DISCLAIMER}")
 
@@ -236,7 +245,8 @@ class Engine:
             return
         qty = CAPITAL * LEV / FX / o
         pos = dict(side=p["side"], entry=o, stop=stop, tp=o + p["side"] * RR * dist, entry_ts=ts, qty=qty,
-                   dist_pct=dist / o * 100, rh=p["rh"], rl=p["rl"], brk=p["brk"])
+                   dist_pct=dist / o * 100, rh=p["rh"], rl=p["rl"], brk=p.get("brk", float("nan")),
+                   vol_ratio=p.get("vol", float("nan")))
         s["pos"], s["pending"] = pos, None
         s["day_note"] = f"{'LONG' if pos['side'] == 1 else 'SHORT'} open"
         self.events += 1
@@ -254,7 +264,7 @@ class Engine:
                    stop=round(p["stop"], 2), target=round(p["tp"], 2), reason=reason, qty_paxg=round(p["qty"], 6),
                    notional_inr=round(CAPITAL * LEV), gross_usd_per_unit=round(gross_u, 2), gross_inr=round(gross, 2),
                    cost_inr=round(cost, 2), net_inr=round(gross - cost, 2), gross_pct=round(gross_u / p["entry"] * 100, 4),
-                   brk_atr=round(p["brk"], 3), dist_pct=round(p["dist_pct"], 3))
+                   vol_ratio=round(p.get("vol_ratio", float("nan")), 3), brk_atr=round(p.get("brk", float("nan")), 3), dist_pct=round(p["dist_pct"], 3))
         self.persist_trade(row)
         s["n_closed"] = s.get("n_closed", 0) + 1
         s["pos"] = None
@@ -269,7 +279,7 @@ class Engine:
         dt = pd.to_datetime(df.ts, unit="ms")
         a = dict(ts=ts_a, o=df.open.values, h=df.high.values, l=df.low.values, c=df.close.values,
                  v=df.volume.values, day=dt.dt.strftime("%Y-%m-%d").values, mins=(dt.dt.hour * 60 + dt.dt.minute).values,
-                 dow=dt.dt.dayofweek.values, atr=self.atr(df))
+                 dow=dt.dt.dayofweek.values, atr=self.atr(df), vma=df.volume.rolling(20).mean().values)
         closed = np.flatnonzero(ts_a + MS <= now_ms)
         for i in closed:
             ts = int(ts_a[i])
@@ -309,12 +319,20 @@ class Engine:
                         s["day_done"] = True
                         sd = 1 if up else -1
                         brk = sd * (c - (rh if up else rl)) / a["atr"][i]
-                        if self.h4_sign(df, ts) != sd:
-                            s["day_note"] = "breakout seen but 4h trend disagrees -> skipped (filter)"
+                        vol = a["v"][i] / a["vma"][i] if a["vma"][i] and a["vma"][i] > 0 else float("nan")
+                        if USE_VOL:
+                            reject = None if vol <= VOL_MAX else f"breakout seen but volume {vol:.2f}x > {VOL_MAX}x -> skipped (filter)"
+                        elif self.h4_sign(df, ts) != sd:
+                            reject = "breakout seen but 4h trend disagrees -> skipped (filter)"
                         elif not brk >= K_ATR:
-                            s["day_note"] = f"breakout only {brk:.2f} ATR beyond range (< {K_ATR}) -> skipped (filter)"
+                            reject = f"breakout only {brk:.2f} ATR beyond range (< {K_ATR}) -> skipped (filter)"
                         else:
-                            s["pending"] = dict(side=sd, entry_ts=ts + MS, rh=float(rh), rl=float(rl), brk=float(brk))
+                            reject = None
+                        if reject:
+                            s["day_note"] = reject
+                        else:
+                            s["pending"] = dict(side=sd, entry_ts=ts + MS, rh=float(rh), rl=float(rl), brk=float(brk),
+                                                vol=float(vol))
                             s["day_note"] = "signal found, waiting for entry candle"
             if m == 720 and not s["day_done"] and not s["pos"] and not s["pending"]:
                 tv = self.trend(day, df)
@@ -395,10 +413,10 @@ def commit_state(msg: str) -> None:
     if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=STATE_DIR).returncode == 0:
         return
     subprocess.run(cmd + ["commit", "-q", "-m", msg], cwd=STATE_DIR)
-    r = subprocess.run(["git", "push", "-q", "origin", "HEAD:paxg-paper-state"], cwd=STATE_DIR, capture_output=True, text=True)
+    r = subprocess.run(["git", "push", "-q", "origin", f"HEAD:{STATE_BRANCH}"], cwd=STATE_DIR, capture_output=True, text=True)
     if r.returncode:
-        subprocess.run(["git", "pull", "-q", "--rebase", "origin", "paxg-paper-state"], cwd=STATE_DIR, capture_output=True)
-        subprocess.run(["git", "push", "-q", "origin", "HEAD:paxg-paper-state"], cwd=STATE_DIR)
+        subprocess.run(["git", "pull", "-q", "--rebase", "origin", STATE_BRANCH], cwd=STATE_DIR, capture_output=True)
+        subprocess.run(["git", "push", "-q", "origin", f"HEAD:{STATE_BRANCH}"], cwd=STATE_DIR)
 
 
 # ----------------------------------------------------------------------------- runners
@@ -421,7 +439,7 @@ def run_loop(minutes: int) -> None:
     eng = Engine(s)
     if first:
         notify(f"🚀 PAXG S1 paper trader STARTED ({PAIR}, {RES_MIN}m)\nPaper capital ₹{CAPITAL:,.0f} x {LEV:g}x = ₹{CAPITAL * LEV:,.0f} per trade.\n"
-               f"Rules: Asia-range breakout 07:00-12:00 UTC, daily EMA20 + 4h trend agree, breakout >= {K_ATR} ATR, stop = opposite side of range, "
+               f"Rules: Asia-range breakout 07:00-12:00 UTC, daily EMA20 trend, " + (f"volume <= {VOL_MAX}x" if USE_VOL else f"4h trend agrees + breakout >= {K_ATR} ATR") + ", stop = opposite side of range, "
                f"target {RR}x stop, time exit 16:00 UTC.\n{DISCLAIMER}")
     end, last_commit = time.time() + minutes * 60, 0.0
     while True:
