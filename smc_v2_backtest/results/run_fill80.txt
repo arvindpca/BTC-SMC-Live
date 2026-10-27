@@ -1,6 +1,6 @@
   symbol  rows               start                 end  missing_candles                 source
- BTCUSDT 70044 2024-10-27 18:30:00 2026-10-27 18:15:00               36  BTCUSDT_15m_cache.csv
-PAXGUSDT 55588 2025-03-27 11:30:00 2026-10-27 18:15:00               24 PAXGUSDT_15m_cache.csv
+ BTCUSDT 70044 2024-10-27 18:45:00 2026-10-27 18:30:00               36  BTCUSDT_15m_cache.csv
+PAXGUSDT 55589 2025-03-27 11:30:00 2026-10-27 18:30:00               24 PAXGUSDT_15m_cache.csv
 
 SMC setups dhoond raha hoon (har coin 20-60 second)...
 BTCUSDT: 335 raw SMC setups | BTC-trend ok 85 | coin-HTF ok 216 | POC ok 232
@@ -10,16 +10,16 @@ Period 2024-10-27 -> 2026-10-27 (24.0 mahine) | TRAIN/TEST cut 2026-01-08 | fee 
 
 ===== 20 VARIANTS (fee 0.075%) -- PF full-period se sorted =====
                     variant  trades  win_pct   pf  exp_R  net_return_pct  max_dd_pct  pf_train  pf_test  test_trades  pf_fee_hi  coins_pf_gt1
-         POC_ONLY__FIXED_2R     243    34.16 0.59  -0.31          -32.03      -34.54      0.54     0.68           99       0.52             0
-         POC_ONLY__FIXED_3R     239    28.87 0.58  -0.33          -33.10      -34.13      0.45     0.83           99       0.51             0
-         POC_ONLY__TRAILING     247    43.32 0.57  -0.27          -28.42      -30.29      0.51     0.67          103       0.48             0
-  NO_TREND_NO_POC__FIXED_2R     339    32.15 0.55  -0.37          -46.93      -49.70      0.54     0.58          138       0.49             0
-           POC_ONLY__HYBRID     247    48.18 0.54  -0.28          -29.48      -30.41      0.50     0.62          103       0.45             0
-       POC_ONLY__FIXED_1.5R     246    37.80 0.54  -0.33          -33.70      -35.19      0.48     0.67          102       0.47             0
-  NO_TREND_NO_POC__TRAILING     356    40.73 0.52  -0.32          -44.11      -46.60      0.48     0.61          148       0.44             0
-  NO_TREND_NO_POC__FIXED_3R     332    26.20 0.51  -0.42          -50.55      -51.33      0.43     0.68          135       0.45             0
-NO_TREND_NO_POC__FIXED_1.5R     346    35.84 0.50  -0.39          -49.05      -50.51      0.46     0.58          142       0.43             0
-    NO_TREND_NO_POC__HYBRID     356    45.51 0.49  -0.34          -45.68      -46.75      0.46     0.55          148       0.40             0
+         POC_ONLY__FIXED_2R     243    34.16 0.59  -0.31          -32.00      -34.54      0.54     0.69           99       0.52             0
+         POC_ONLY__FIXED_3R     239    28.87 0.58  -0.33          -33.07      -34.13      0.45     0.83           99       0.51             0
+         POC_ONLY__TRAILING     247    43.32 0.57  -0.27          -28.39      -30.29      0.51     0.67          103       0.48             0
+  NO_TREND_NO_POC__FIXED_2R     339    32.15 0.55  -0.37          -46.90      -49.70      0.54     0.59          138       0.49             0
+       POC_ONLY__FIXED_1.5R     246    37.80 0.54  -0.33          -33.67      -35.19      0.48     0.67          102       0.47             0
+           POC_ONLY__HYBRID     247    48.18 0.54  -0.28          -29.46      -30.41      0.50     0.62          103       0.45             0
+  NO_TREND_NO_POC__TRAILING     356    40.73 0.52  -0.32          -44.08      -46.60      0.48     0.61          148       0.44             0
+  NO_TREND_NO_POC__FIXED_3R     332    26.20 0.51  -0.42          -50.53      -51.33      0.43     0.68          135       0.45             0
+NO_TREND_NO_POC__FIXED_1.5R     346    35.84 0.50  -0.39          -49.03      -50.51      0.46     0.58          142       0.43             0
+    NO_TREND_NO_POC__HYBRID     356    45.51 0.49  -0.34          -45.66      -46.75      0.46     0.55          148       0.40             0
           BTC_POC__FIXED_3R      63    23.81 0.43  -0.52          -15.18      -14.96      0.35     0.55           29       0.39             0
       ALL_FILTERS__FIXED_3R      63    23.81 0.43  -0.52          -15.18      -14.96      0.35     0.55           29       0.39             0
     ALL_FILTERS__FIXED_1.5R      65    33.85 0.43  -0.46          -14.00      -13.78      0.34     0.55           30       0.37             0
@@ -36,7 +36,7 @@ NO_TREND_NO_POC__FIXED_1.5R     346    35.84 0.50  -0.39          -49.05      -5
 filters                       
 ALL_FILTERS      0.38     0.52
 BTC_POC          0.38     0.52
-NO_TREND_NO_POC  0.51     0.58
+NO_TREND_NO_POC  0.51     0.59
 POC_ONLY         0.57     0.67
 
 --- Exit ka asar (median) ---
