@@ -2,7 +2,7 @@
 
 > **EDUCATIONAL PURPOSE ONLY.** Paper trading, no real orders, not financial advice. Results are GROSS (no fees); fees/slippage reduce results. Backtest and paper results do not guarantee anything.
 
-- Updated: 2026-10-28 11:32 UTC (28 Oct 05:02 PM IST) | Started: 2026-10-28 07:57 UTC
+- Updated: 2026-10-28 12:47 UTC (28 Oct 06:17 PM IST) | Started: 2026-10-28 07:57 UTC
 - Paper account: ₹3,000 per symbol x 30x = ₹90,000 per trade | USD/INR 88
 - Links: [STATUS](https://github.com/arvindpca/BTC-SMC-Live/blob/mtf-paper-state/STATUS.md) | [trades.csv](https://github.com/arvindpca/BTC-SMC-Live/blob/mtf-paper-state/trades.csv) | [runner](https://github.com/arvindpca/BTC-SMC-Live/actions/workflows/mtf-paper.yml)
 
