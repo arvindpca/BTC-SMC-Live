@@ -1,0 +1,67 @@
+name: MTF Paper Trader 1D>1H>15M BTC+PAXG (educational, paper only - no orders)
+
+# EDUCATIONAL PURPOSE ONLY. Paper trading with public CoinDCX candles. No API keys, no orders, no real money.
+# Not financial advice. One long job loops ~5h40m (a cycle every 15 min at :02/:17/:32/:47 UTC), then starts its
+# successor. Cron is only a safety net that restarts the chain. State/journal live on branch `mtf-paper-state`
+# (STATUS.md = live tracking, trades.csv = journal), never on main.
+#
+# Optional Telegram alerts: repo secrets TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.
+# Optional variables: MTF_PAPER_CAPITAL_INR (default 3000, per symbol), MTF_PAPER_LEVERAGE (30), MTF_PAPER_USDINR (88).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "mtf_paper/**"
+      - ".github/workflows/mtf-paper.yml"
+  schedule:
+    - cron: "41 * * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: mtf-paper-trader
+  cancel-in-progress: false
+
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      PYTHONUNBUFFERED: "1"
+      MTF_STATE_BRANCH: mtf-paper-state
+      MTF_PAPER_CAPITAL_INR: ${{ vars.MTF_PAPER_CAPITAL_INR || '3000' }}
+      MTF_PAPER_LEVERAGE: ${{ vars.MTF_PAPER_LEVERAGE || '30' }}
+      MTF_PAPER_USDINR: ${{ vars.MTF_PAPER_USDINR || '88' }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests pandas numpy
+      - name: Load paper state (branch mtf-paper-state)
+        run: |
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$URL" "$MTF_STATE_BRANCH" >/dev/null 2>&1; then
+            git clone -q --branch "$MTF_STATE_BRANCH" "$URL" paper_state
+          else
+            mkdir paper_state && cd paper_state && git init -q -b "$MTF_STATE_BRANCH" && git remote add origin "$URL"
+          fi
+      - name: Run paper trader (paper only, no orders)
+        run: python -u -m mtf_paper.paper loop 340
+  next:
+    needs: paper
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start successor run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run mtf-paper.yml --ref main -R "$GITHUB_REPOSITORY" || true
