@@ -1,0 +1,20 @@
+{
+ "live_from_ms": 1793174231000,
+ "started": "2026-10-28 07:57 UTC",
+ "n_closed": 0,
+ "daily_sent": "",
+ "sym": {
+  "BTC": {
+   "announced": [],
+   "closed": [],
+   "missed": [],
+   "open": null
+  },
+  "PAXG": {
+   "announced": [],
+   "closed": [],
+   "missed": [],
+   "open": null
+  }
+ }
+}
