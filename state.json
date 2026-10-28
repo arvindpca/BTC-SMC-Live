@@ -1,12 +1,12 @@
 {
  "live_from_ms": 1793147544000,
- "last_ts": 1793199300000,
+ "last_ts": 1793202900000,
  "day": "2026-10-28",
  "day_done": true,
  "day_note": "no trend-aligned (short) breakout by 12:00 UTC - no trade",
  "pending": null,
  "pos": null,
- "daily_sent": "",
+ "daily_sent": "2026-10-28",
  "n_closed": 0,
  "started": "2026-10-28 00:32 UTC"
 }
