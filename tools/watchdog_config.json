@@ -1,0 +1,24 @@
+{
+ "interval": [
+  {
+   "wf": "live-trading.yml",
+   "gap_min": 90,
+   "label": "BTC LIVE trading bot"
+  },
+  {
+   "wf": "paper-trading.yml",
+   "gap_min": 30,
+   "label": "BTC paper trading"
+  },
+  {
+   "wf": "mtf-paper.yml",
+   "gap_min": 120,
+   "label": "MTF paper (BTC+PAXG)"
+  },
+  {
+   "wf": "paxg-paper.yml",
+   "gap_min": 120,
+   "label": "PAXG paper"
+  }
+ ]
+}
