@@ -11,10 +11,28 @@
    "open": null
   },
   "PAXG": {
-   "announced": [],
+   "announced": [
+    1793241000000
+   ],
    "closed": [],
    "missed": [],
-   "open": null
+   "open": {
+    "entry_ts": 1793241000000,
+    "side": -1,
+    "entry": 4044.04,
+    "stop": 4062.0,
+    "tp": 4008.12,
+    "dist_pct": 0.444110345100445,
+    "trend_str": 0.8640601593768525,
+    "zone_age_h": 11.5,
+    "zlo": 4057.1580844121054,
+    "zhi": 4062.0,
+    "status": "OPEN",
+    "reason": "",
+    "exit_px": NaN,
+    "exit_ts": null,
+    "ok": true
+   }
   }
  }
 }
