@@ -1,9 +1,9 @@
 {
  "live_from_ms": 1793147544000,
- "last_ts": 1793256600000,
+ "last_ts": 1793260500000,
  "day": "2026-10-29",
- "day_done": false,
- "day_note": "",
+ "day_done": true,
+ "day_note": "breakout only 0.35 ATR beyond range (< 0.5) -> skipped (filter)",
  "pending": null,
  "pos": null,
  "daily_sent": "2026-10-28",
