@@ -32,7 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 355
     env:
-      LIVE_MODE: ${{ vars.LIVE_MODE || secrets.LIVE_MODE || 'OFF' }}
+      # SIGNAL_ONLY = sirf public API se scan + Telegram signal, koi order nahi (CoinDCX ab key ke saath fixed IP maangta hai).
+      # Wapas auto-trading ke liye is line ko purane jaisa karo: ${{ vars.LIVE_MODE || secrets.LIVE_MODE || 'OFF' }}
+      LIVE_MODE: SIGNAL_ONLY
       LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM || secrets.LIVE_CONFIRM }}
       COINDCX_FUTURES_PAIR: B-BTC_USDT  # locked; the bot refuses any other pair
       COINDCX_MARGIN_CURRENCY: INR

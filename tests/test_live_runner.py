@@ -385,3 +385,21 @@ def test_entry_records_trade_for_trailing(monkeypatch, tmp_path):
     run(monkeypatch, tmp_path, config, ex, make_signal())
     trade = lr.load_state(tmp_path / "state.json")["open_trade"]
     assert trade["max_rr"] == 0 and trade["initial_risk"] == 1_000.0 and trade["target"] == 104_000.0
+
+
+# ---------------- SIGNAL_ONLY (public API only) ----------------
+def test_signal_only_needs_no_api_keys():
+    config = load_config({"LIVE_MODE": "SIGNAL_ONLY"})
+    assert config.mode == "SIGNAL_ONLY"
+
+
+def test_signal_only_sends_signal_and_never_touches_exchange(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    config = load_config({"LIVE_MODE": "SIGNAL_ONLY"})
+    result, msgs = run(monkeypatch, tmp_path, config, ex, make_signal(side="SHORT", entry=100_000.0, stop=101_000.0))
+    assert result["status"] == "SIGNAL_SENT" and result["orders_submitted"] == 0
+    assert ex.calls == []
+    assert "SHORT" in msgs[0] and "101000.00" in msgs[0] and "96000.00" in msgs[0]
+    # same signal again -> duplicate guard, no second message
+    result2, msgs2 = run(monkeypatch, tmp_path, config, ex, make_signal(side="SHORT", entry=100_000.0, stop=101_000.0))
+    assert result2["status"] == "DUPLICATE_SIGNAL" and msgs2 == []

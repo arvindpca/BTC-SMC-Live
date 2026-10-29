@@ -1,7 +1,8 @@
 """One bounded LIVE/DRY_RUN trading cycle for GitHub Actions.
 
 Safety design (every item is covered by tests/test_live_runner.py):
-  * LIVE_MODE defaults to OFF.  DRY_RUN does everything except submit orders.
+  * LIVE_MODE defaults to OFF.  SIGNAL_ONLY uses only public CoinDCX data (no API key,
+    no orders) and sends each signal to Telegram for manual trading.  DRY_RUN does everything except submit orders.
     LIVE additionally needs LIVE_CONFIRM=YES_TRADE_REAL_MONEY.
   * Hard caps on margin and leverage; one position at a time (checked on the
     exchange, never assumed from local state).
@@ -24,7 +25,7 @@ import os
 import time
 from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -37,6 +38,7 @@ from app.strategy_live import Signal, analyze, format_scan_report, latest_signal
 CONFIRM_PHRASE = "YES_TRADE_REAL_MONEY"
 ALLOWED_PAIR = "B-BTC_USDT"  # hard lock: this bot trades BTC/USDT futures only
 STATE_PATH = Path("state/live_state.json")
+IST = timezone(timedelta(hours=5, minutes=30))
 FILL_POLL_SECONDS = 20
 MAX_FILL_RISK_DRIFT = 1.25  # actual risk distance may be at most 125% of planned
 
@@ -47,7 +49,7 @@ class ConfigError(RuntimeError):
 
 @dataclass(frozen=True)
 class LiveConfig:
-    mode: str  # OFF | DRY_RUN | LIVE
+    mode: str  # OFF | SIGNAL_ONLY | DRY_RUN | LIVE
     pair: str
     margin_inr: float
     leverage: int
@@ -64,8 +66,8 @@ def load_config(env: dict[str, str] | None = None) -> LiveConfig:
     get = lambda k, d="": (e.get(k, d) or d).strip()  # noqa: E731
 
     mode = get("LIVE_MODE", "OFF").upper()
-    if mode not in {"OFF", "DRY_RUN", "LIVE"}:
-        raise ConfigError("LIVE_MODE must be OFF, DRY_RUN or LIVE")
+    if mode not in {"OFF", "SIGNAL_ONLY", "DRY_RUN", "LIVE"}:
+        raise ConfigError("LIVE_MODE must be OFF, SIGNAL_ONLY, DRY_RUN or LIVE")
     if mode == "LIVE" and get("LIVE_CONFIRM") != CONFIRM_PHRASE:
         raise ConfigError(f"LIVE mode requires LIVE_CONFIRM={CONFIRM_PHRASE}")
     if get("COINDCX_MARGIN_CURRENCY", "INR").upper() != "INR":
@@ -89,7 +91,7 @@ def load_config(env: dict[str, str] | None = None) -> LiveConfig:
     if mode != "OFF":
         if pair != ALLOWED_PAIR:
             raise ConfigError(f"This bot is locked to {ALLOWED_PAIR} only (got {pair!r})")
-        if not get("COINDCX_API_KEY") or not get("COINDCX_API_SECRET"):
+        if mode != "SIGNAL_ONLY" and (not get("COINDCX_API_KEY") or not get("COINDCX_API_SECRET")):
             raise ConfigError("COINDCX_API_KEY / COINDCX_API_SECRET secrets are missing")
 
     return LiveConfig(
@@ -303,6 +305,22 @@ def run_cycle(
     if signal.bar_time <= int(state.get("last_signal_bar_time", 0)):
         print("Signal already handled earlier (duplicate guard).")
         return {"status": "DUPLICATE_SIGNAL", "orders_submitted": 0}
+    if config.mode == "SIGNAL_ONLY":
+        # Sirf public API: koi key nahi, koi order nahi. Signal Telegram par jaata hai, trade haath se.
+        state["last_signal_bar_time"] = signal.bar_time
+        save_state(state, state_path)
+        when = datetime.fromtimestamp(signal.bar_time / 1000, timezone.utc).astimezone(IST).strftime("%d-%b %H:%M IST")
+        notify(
+            f"📢 BTC SIGNAL ({signal.side}) - khud trade lagao\n"
+            f"Pair: {config.pair}\n"
+            f"Entry: {signal.entry:.2f}\n"
+            f"SL: {signal.stop:.2f}\n"
+            f"Target (1:4): {signal.target:.2f}\n"
+            f"Risk: {signal.risk_pct:.2f}%\n"
+            f"Candle: {when}\n"
+            f"(Signal-only mode: bot ne koi order nahi lagaya)"
+        )
+        return {"status": "SIGNAL_SENT", "orders_submitted": 0}
     if state["trades_today"] >= config.max_trades_per_day:
         notify(f"BTC SMC LIVE: daily trade cap ({config.max_trades_per_day}) reached; signal skipped.")
         return {"status": "DAILY_CAP", "orders_submitted": 0}
