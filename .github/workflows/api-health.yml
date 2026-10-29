@@ -3,7 +3,7 @@ name: API Health Check (key expire alert)
 # Har API (CoinDCX / Angel One / GitHub token / Telegram) ka login check karta hai.
 # Koi key expire ya galat ho to Telegram par alert aata hai, saath me 2 link:
 #   1) nayi key kahan banani hai   2) GitHub me kahan update karni hai.
-# Koi trade nahi hota.  Schedule: har 6 ghante (crypto 24x7).  Manually bhi chala sakte ho (Run workflow).
+# Koi trade nahi hota.  Schedule: har 6 ghante.  CoinDCX check abhi band (bot SIGNAL_ONLY par hai).  Manually bhi chala sakte ho (Run workflow).
 
 on:
   workflow_dispatch:
@@ -24,8 +24,6 @@ jobs:
           python-version: "3.12"
       - name: Check all APIs
         env:
-          COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
-          COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python tools/api_health_check.py

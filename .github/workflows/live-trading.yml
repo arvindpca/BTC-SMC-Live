@@ -32,9 +32,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 355
     env:
-      # LIVE_MODE repo variable/secret se aata hai (abhi LIVE).  Key fail ho to bot order nahi lagata,
-      # signal Telegram par bhejta hai.  Sirf signal chahiye (bina key) to LIVE_MODE=SIGNAL_ONLY set karo.
-      LIVE_MODE: ${{ vars.LIVE_MODE || secrets.LIVE_MODE || 'OFF' }}
+      # ABHI: SIGNAL_ONLY (CoinDCX key expire, nayi key ke liye fixed IP chahiye).
+      # Sirf public API se scan + Telegram signal, koi order nahi.
+      # Nayi key + fixed IP lagne ke baad wapas LIVE: is line ko ye karo ->
+      #   LIVE_MODE: ${{ vars.LIVE_MODE || secrets.LIVE_MODE || 'OFF' }}
+      LIVE_MODE: SIGNAL_ONLY
       LIVE_CONFIRM: ${{ vars.LIVE_CONFIRM || secrets.LIVE_CONFIRM }}
       COINDCX_FUTURES_PAIR: B-BTC_USDT  # locked; the bot refuses any other pair
       COINDCX_MARGIN_CURRENCY: INR
