@@ -2,9 +2,9 @@
 
 > **EDUCATIONAL PURPOSE ONLY.** Paper trading, no real orders, not financial advice. Backtest and paper results do not guarantee future results.
 
-- Updated: 2026-10-29 17:07 UTC | Started: 2026-10-28 00:32 UTC
+- Updated: 2026-10-29 18:12 UTC | Started: 2026-10-28 00:32 UTC
 - Instrument: B-PAXG_USDT 15m | Paper capital ₹3,000 x 30x = ₹90,000 per trade | USD/INR 88 | fee 0.025% + slippage 0.03% per side
-- Last price: $4,024.47 | Today (2026-10-29): breakout only 0.35 ATR beyond range (< 0.5) -> skipped (filter)
+- Last price: $4,015.56 | Today (2026-10-29): breakout only 0.35 ATR beyond range (< 0.5) -> skipped (filter)
 
 ## Open position
 None
