@@ -1,11 +1,23 @@
 {
  "live_from_ms": 1793127442000,
- "last_ts": 1793257200000,
+ "last_ts": 1793259900000,
  "day": "2026-10-29",
- "day_done": false,
- "day_note": "",
+ "day_done": true,
+ "day_note": "SHORT open",
  "pending": null,
- "pos": null,
+ "pos": {
+  "side": -1,
+  "entry": 4025.1,
+  "stop": 4065.63,
+  "tp": 3964.3049999999994,
+  "entry_ts": 1793260800000,
+  "qty": 0.2540874196236796,
+  "dist_pct": 1.006931504807339,
+  "rh": 4065.63,
+  "rl": 4026.0,
+  "brk": 0.15584562009240108,
+  "vol_ratio": 1.1558601565062405
+ },
  "daily_sent": "2026-10-28",
  "n_closed": 0,
  "started": "2026-10-27 18:57 UTC"
