@@ -194,6 +194,9 @@ SECRETS_PAGE = "https://github.com/arvindpca/BTC-SMC-Live/settings/secrets/actio
 AUTH_WORDS = ("http 401", "http 403", "unauthor", "invalid", "expire", "api key", "apikey", "signature")
 
 
+_KEY_FAILED = {"value": False}  # ek job ke andar: key fail hui to baaki cycles signal-only
+
+
 def is_auth_error(exc: Exception) -> bool:
     text = str(exc).lower()
     if "error code: 10" in text:  # Cloudflare block, not a key problem
@@ -246,6 +249,15 @@ def manage_open_trade(config, client, c5, state_path: Path, notify) -> dict[str,
     try:
         position = client.open_position(config.pair)
     except CoinDCXError as exc:
+        if is_auth_error(exc):
+            if not _KEY_FAILED["value"]:
+                _KEY_FAILED["value"] = True
+                notify("⚠️ BTC SMC LIVE: CoinDCX API key kaam nahi kar rahi, khula trade bot manage nahi kar sakta.\n"
+                       f"Trade ka SL/TP CoinDCX par laga hua hai - CoinDCX app me khud dekh lo.\n"
+                       f"Ab se naye signals Telegram par aayenge (order nahi lagega).\nKey update: {SECRETS_PAGE}")
+            state["open_trade"] = None  # aage manage nahi ho sakta; signal scanning chalu rakho
+            save_state(state, state_path)
+            return {"status": "TRADE_CLOSED", "orders_submitted": 0}
         notify(f"BTC SMC LIVE: could not read position to manage trade ({exc}). Exchange SL/TP still active.")
         return {"status": "POSITION_CHECK_FAILED", "orders_submitted": 0}
     if position is None:
@@ -310,7 +322,7 @@ def run_cycle(
     now_ts = time.time() if now is None else now
     c5 = fetch(pair=config.pair, limit=500, now_seconds=int(now_ts), resolution="5")
     c1 = fetch(pair=config.pair, limit=120, now_seconds=int(now_ts), resolution="60")
-    if config.mode == "LIVE" and load_state(state_path).get("open_trade"):
+    if config.mode == "LIVE" and not _KEY_FAILED["value"] and load_state(state_path).get("open_trade"):
         client = client or FuturesClient(config.api_key, config.api_secret)
         managed = manage_open_trade(config, client, c5, state_path, notify)
         if managed["status"] != "TRADE_CLOSED":
@@ -331,6 +343,13 @@ def run_cycle(
     if signal.bar_time <= int(state.get("last_signal_bar_time", 0)):
         print("Signal already handled earlier (duplicate guard).")
         return {"status": "DUPLICATE_SIGNAL", "orders_submitted": 0}
+    if config.mode == "LIVE" and _KEY_FAILED["value"]:
+        state["last_signal_bar_time"] = signal.bar_time
+        save_state(state, state_path)
+        notify(signal_message(
+            config, signal, f"📢 BTC SIGNAL ({signal.side}) - KHUD TRADE LAGAO",
+            f"⚠️ CoinDCX key expire hai, bot ne order NAHI lagaya.\nKey update: {SECRETS_PAGE}"))
+        return {"status": "KEY_FAILED_SIGNAL_SENT", "orders_submitted": 0}
     if config.mode == "SIGNAL_ONLY":
         # Sirf public API: koi key nahi, koi order nahi. Signal Telegram par jaata hai, trade haath se.
         state["last_signal_bar_time"] = signal.bar_time
@@ -358,6 +377,7 @@ def run_cycle(
         )
     except (CoinDCXError, ValueError, ConfigError) as exc:
         if isinstance(exc, CoinDCXError) and is_auth_error(exc):
+            _KEY_FAILED["value"] = True
             # Key expire / IP block: order nahi lag sakta, lekin signal mat gawao - Telegram par bhejo.
             state["last_signal_bar_time"] = signal.bar_time
             save_state(state, state_path)

@@ -412,3 +412,20 @@ def test_live_key_failure_sends_signal_instead_of_order(monkeypatch, tmp_path):
     result, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
     assert result["status"] == "KEY_FAILED_SIGNAL_SENT" and result["orders_submitted"] == 0
     assert "KHUD TRADE LAGAO" in msgs[0] and "settings/secrets" in msgs[0]
+
+
+def test_expired_key_with_open_trade_does_not_spam_and_keeps_signalling(monkeypatch, tmp_path):
+    import json as _json
+    monkeypatch.setitem(lr._KEY_FAILED, "value", False)
+    (tmp_path / "state.json").write_text(_json.dumps({"open_trade": {"side": "LONG"}, "last_signal_bar_time": 0}))
+    err = CoinDCXError('HTTP 422: {"code":422,"message":"API key expired. Please generate new keys."}')
+    ex = FakeExchange(details=SMALL_MIN)
+    monkeypatch.setattr(ex, "open_position", lambda pair: (_ for _ in ()).throw(err), raising=False)
+    monkeypatch.setattr(ex, "active_instruments", lambda: (_ for _ in ()).throw(err), raising=False)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    r1, m1 = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert r1["status"] == "KEY_FAILED_SIGNAL_SENT"
+    assert any("key kaam nahi" in m for m in m1) and any("KHUD TRADE" in m for m in m1)
+    r2, m2 = run(monkeypatch, tmp_path, config, ex, make_signal())  # same candle -> silent
+    assert r2["status"] == "DUPLICATE_SIGNAL" and m2 == []
+    monkeypatch.setitem(lr._KEY_FAILED, "value", False)
