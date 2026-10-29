@@ -189,6 +189,32 @@ def make_notifier(config: LiveConfig) -> Callable[[str], None]:
     return notify
 
 
+# ---- signal message (SIGNAL_ONLY, or LIVE fallback when the key fails) ----
+SECRETS_PAGE = "https://github.com/arvindpca/BTC-SMC-Live/settings/secrets/actions"
+AUTH_WORDS = ("http 401", "http 403", "unauthor", "invalid", "expire", "api key", "apikey", "signature")
+
+
+def is_auth_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    if "error code: 10" in text:  # Cloudflare block, not a key problem
+        return False
+    return any(w in text for w in AUTH_WORDS)
+
+
+def signal_message(config: LiveConfig, signal: Signal, header: str, footer: str) -> str:
+    when = datetime.fromtimestamp(signal.bar_time / 1000, timezone.utc).astimezone(IST).strftime("%d-%b %H:%M IST")
+    return (
+        f"{header}\n"
+        f"Pair: {config.pair}\n"
+        f"Entry: {signal.entry:.2f}\n"
+        f"SL: {signal.stop:.2f}\n"
+        f"Target (1:4): {signal.target:.2f}\n"
+        f"Risk: {signal.risk_pct:.2f}%\n"
+        f"Candle: {when}\n"
+        f"{footer}"
+    )
+
+
 # ---- core cycle ----------------------------------------------------------
 def _quote_currency(pair: str) -> str:
     quote = pair.split("_", 1)[1].upper()
@@ -309,17 +335,8 @@ def run_cycle(
         # Sirf public API: koi key nahi, koi order nahi. Signal Telegram par jaata hai, trade haath se.
         state["last_signal_bar_time"] = signal.bar_time
         save_state(state, state_path)
-        when = datetime.fromtimestamp(signal.bar_time / 1000, timezone.utc).astimezone(IST).strftime("%d-%b %H:%M IST")
-        notify(
-            f"📢 BTC SIGNAL ({signal.side}) - khud trade lagao\n"
-            f"Pair: {config.pair}\n"
-            f"Entry: {signal.entry:.2f}\n"
-            f"SL: {signal.stop:.2f}\n"
-            f"Target (1:4): {signal.target:.2f}\n"
-            f"Risk: {signal.risk_pct:.2f}%\n"
-            f"Candle: {when}\n"
-            f"(Signal-only mode: bot ne koi order nahi lagaya)"
-        )
+        notify(signal_message(config, signal, f"📢 BTC SIGNAL ({signal.side}) - khud trade lagao",
+                              "(Signal-only mode: bot ne koi order nahi lagaya)"))
         return {"status": "SIGNAL_SENT", "orders_submitted": 0}
     if state["trades_today"] >= config.max_trades_per_day:
         notify(f"BTC SMC LIVE: daily trade cap ({config.max_trades_per_day}) reached; signal skipped.")
@@ -340,6 +357,15 @@ def run_cycle(
             quote=quote, usdt_inr=usdt_inr, details=details,
         )
     except (CoinDCXError, ValueError, ConfigError) as exc:
+        if isinstance(exc, CoinDCXError) and is_auth_error(exc):
+            # Key expire / IP block: order nahi lag sakta, lekin signal mat gawao - Telegram par bhejo.
+            state["last_signal_bar_time"] = signal.bar_time
+            save_state(state, state_path)
+            notify(signal_message(
+                config, signal, f"📢 BTC SIGNAL ({signal.side}) - KHUD TRADE LAGAO",
+                f"⚠️ CoinDCX API key kaam nahi kar rahi, isliye bot ne order NAHI lagaya.\n"
+                f"Error: {str(exc)[:150]}\nKey update: {SECRETS_PAGE}"))
+            return {"status": "KEY_FAILED_SIGNAL_SENT", "orders_submitted": 0, "error": str(exc)}
         notify(f"BTC SMC LIVE: pre-trade check failed, no order sent. Reason: {exc}")
         return {"status": "PRETRADE_FAILED", "orders_submitted": 0, "error": str(exc)}
 

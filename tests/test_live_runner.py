@@ -403,3 +403,12 @@ def test_signal_only_sends_signal_and_never_touches_exchange(monkeypatch, tmp_pa
     # same signal again -> duplicate guard, no second message
     result2, msgs2 = run(monkeypatch, tmp_path, config, ex, make_signal(side="SHORT", entry=100_000.0, stop=101_000.0))
     assert result2["status"] == "DUPLICATE_SIGNAL" and msgs2 == []
+
+
+def test_live_key_failure_sends_signal_instead_of_order(monkeypatch, tmp_path):
+    ex = FakeExchange(details=SMALL_MIN)
+    monkeypatch.setattr(ex, "active_instruments", lambda: (_ for _ in ()).throw(CoinDCXError('HTTP 401: {"message":"Invalid API key"}')), raising=False)
+    config = cfg(LIVE_MODE="LIVE", LIVE_CONFIRM=CONFIRM_PHRASE, **BIG)
+    result, msgs = run(monkeypatch, tmp_path, config, ex, make_signal())
+    assert result["status"] == "KEY_FAILED_SIGNAL_SENT" and result["orders_submitted"] == 0
+    assert "KHUD TRADE LAGAO" in msgs[0] and "settings/secrets" in msgs[0]
