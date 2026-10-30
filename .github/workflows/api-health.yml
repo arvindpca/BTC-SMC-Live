@@ -26,7 +26,7 @@ jobs:
         env:
           COINDCX_API_KEY: ${{ secrets.COINDCX_API_KEY }}
           COINDCX_API_SECRET: ${{ secrets.COINDCX_API_SECRET }}
-          COINDCX_PROXY: ${{ secrets.COINDCX_PROXY }}
+          # COINDCX_PROXY: ${{ secrets.COINDCX_PROXY }}   # Oracle proxy theek hone par wapas chalu karna
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python tools/api_health_check.py
