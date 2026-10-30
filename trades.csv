@@ -1,2 +1,3 @@
 id,symbol,side,entry_time_utc,exit_time_utc,entry,exit,stop,target,reason,qty,notional_inr,gross_pct,gross_inr,net_inr_ref,dist_pct,trend_str_pct,zone_age_h,r_multiple
 1,PAXG,-1,2026-10-29 02:30,2026-10-29 14:45,4044.04,4038.28,4062.0,4008.12,TIME EXIT (12h),0.252897,90000,0.1424,128.19,29.26,0.444,0.864,11.5,0.321
+2,PAXG,-1,2026-10-29 16:15,2026-10-30 04:30,4020.38,4002.9,4041.25,3978.64,TIME EXIT (12h),0.254386,90000,0.4348,391.31,292.52,0.519,1.073,2.2,0.838
