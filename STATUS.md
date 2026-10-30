@@ -2,14 +2,14 @@
 
 > **EDUCATIONAL PURPOSE ONLY.** Paper trading, no real orders, not financial advice. Results are GROSS (no fees); fees/slippage reduce results. Backtest and paper results do not guarantee anything.
 
-- Updated: 2026-10-30 01:02 UTC (30 Oct 06:32 AM IST) | Started: 2026-10-28 07:57 UTC
+- Updated: 2026-10-30 02:17 UTC (30 Oct 07:47 AM IST) | Started: 2026-10-28 07:57 UTC
 - Paper account: ₹3,000 per symbol x 30x = ₹90,000 per trade | USD/INR 88
 - Links: [STATUS](https://github.com/arvindpca/BTC-SMC-Live/blob/mtf-paper-state/STATUS.md) | [trades.csv](https://github.com/arvindpca/BTC-SMC-Live/blob/mtf-paper-state/trades.csv) | [runner](https://github.com/arvindpca/BTC-SMC-Live/actions/workflows/mtf-paper.yml)
 
 ## Open positions
 | Symbol | Side | Entry | Now | Stop | Target | Unrealized (gross) | Since |
 |---|---|---|---|---|---|---|---|
-| PAXG | SHORT | $4,020.38 | $4,005.93 | $4,041.25 | $3,978.64 | +₹323 | 29 Oct 16:15 UTC | 29 Oct 09:45 PM IST |
+| PAXG | SHORT | $4,020.38 | $4,014.56 | $4,041.25 | $3,978.64 | +₹130 | 29 Oct 16:15 UTC | 29 Oct 09:45 PM IST |
 
 ## Statement (closed trades, gross)
 ```
