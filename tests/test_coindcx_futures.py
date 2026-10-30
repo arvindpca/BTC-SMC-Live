@@ -117,3 +117,14 @@ def test_paging_is_bounded():
     client = FuturesClient("k", "s", session=session)
     assert client.open_position("B-BTC_USDT") is None
     assert len(session.posts) == FuturesClient.POSITIONS_MAX_PAGES
+
+
+def test_proxy_env_routes_requests_through_proxy(monkeypatch):
+    import requests
+    from app.coindcx_futures import FuturesClient
+    monkeypatch.setenv("COINDCX_PROXY", "http://u:p@1.2.3.4:8888")
+    c = FuturesClient("k", "s")
+    assert isinstance(c._session, requests.Session)
+    assert c._session.proxies["https"] == "http://u:p@1.2.3.4:8888"
+    monkeypatch.delenv("COINDCX_PROXY")
+    assert FuturesClient("k", "s")._session is requests

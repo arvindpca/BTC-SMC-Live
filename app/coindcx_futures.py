@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import json
 import time
 from typing import Any
@@ -47,6 +48,11 @@ class FuturesClient:
         self._key = api_key
         self._secret = api_secret
         self.margin_currency = margin_currency
+        proxy = os.getenv("COINDCX_PROXY", "").strip()
+        if session is requests and proxy:
+            # CoinDCX key fixed IP se bandhi hai -> Oracle server (proxy) ke raaste jao
+            session = requests.Session()
+            session.proxies = {"https": proxy, "http": proxy}
         self._session = session
         self._base = base_url.rstrip("/")
         self._clock = clock

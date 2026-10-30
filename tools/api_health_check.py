@@ -43,12 +43,14 @@ def env(name: str) -> str:
 
 
 def http(url: str, *, data: bytes | None = None, headers: dict | None = None,
-         method: str | None = None, timeout: int = 20) -> tuple[int, str]:
+         method: str | None = None, timeout: int = 20, proxy: str = "") -> tuple[int, str]:
     hdrs = {"User-Agent": "Mozilla/5.0 (api-health-check)"}
     hdrs.update(headers or {})
     req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
+    opener = (urllib.request.build_opener(urllib.request.ProxyHandler({"https": proxy, "http": proxy}))
+              if proxy else urllib.request.build_opener())
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with opener.open(req, timeout=timeout) as r:
             return r.status, r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", "replace")
@@ -75,11 +77,16 @@ def check_coindcx() -> tuple[bool | None, str]:
         code, text = http("https://api.coindcx.com/exchange/v1/users/balances",
                           data=body.encode(), method="POST",
                           headers={"Content-Type": "application/json",
-                                   "X-AUTH-APIKEY": key, "X-AUTH-SIGNATURE": sig})
-    except Exception as e:  # network
-        return None, f"network error: {e}"
+                                   "X-AUTH-APIKEY": key, "X-AUTH-SIGNATURE": sig},
+                          proxy=env("COINDCX_PROXY"))
+    except Exception as e:  # network / proxy server band
+        if env("COINDCX_PROXY"):
+            return False, f"Oracle proxy server tak nahi pahuncha ({type(e).__name__}) - server chalu hai?"
+        return None, f"network error: {type(e).__name__}"
     if code == 200:
         return True, "OK"
+    if code == 407:
+        return False, "Oracle proxy ne password reject kiya (COINDCX_PROXY secret check karo)"
     if looks_like_auth_problem(code, text):
         return False, f"HTTP {code}: {text[:200]}"
     return None, f"HTTP {code}: {text[:200]}"
