@@ -69,6 +69,25 @@ def looks_like_auth_problem(code: int, body: str) -> bool:
 # Har check (ok, detail) return karta hai.  ok=None matlab "check nahi ho paya"
 # (network / server down) - us par alert nahi bhejte, taaki faltu message na aaye.
 
+def _why(e: Exception) -> str:
+    """Error ki wajah, bina password ke."""
+    import re
+    txt = str(getattr(e, "reason", "") or e)
+    return re.sub(r"//[^@/]*@", "//***@", txt)[:150]
+
+
+def _tcp_probe() -> str:
+    """Proxy port tak seedha TCP connection banta hai ya nahi."""
+    import socket
+    from urllib.parse import urlparse
+    try:
+        u = urlparse(env("COINDCX_PROXY"))
+        with socket.create_connection((u.hostname, u.port or 8888), timeout=8):
+            return f"TCP {u.hostname}:{u.port} khula"
+    except Exception as e:  # noqa: BLE001
+        return f"TCP fail: {type(e).__name__} {e}"[:120]
+
+
 def check_coindcx() -> tuple[bool | None, str]:
     key, secret = env("COINDCX_API_KEY"), env("COINDCX_API_SECRET")
     body = json.dumps({"timestamp": int(time.time() * 1000)}, separators=(",", ":"))
@@ -81,7 +100,7 @@ def check_coindcx() -> tuple[bool | None, str]:
                           proxy=env("COINDCX_PROXY"))
     except Exception as e:  # network / proxy server band
         if env("COINDCX_PROXY"):
-            return False, f"Oracle proxy server tak nahi pahuncha ({type(e).__name__}) - server chalu hai?"
+            return False, f"Oracle proxy server tak nahi pahuncha ({type(e).__name__}: {_why(e)}; {_tcp_probe()}) - server chalu hai?"
         return None, f"network error: {type(e).__name__}"
     if code == 200:
         return True, "OK"
