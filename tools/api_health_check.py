@@ -168,7 +168,8 @@ def secret_link(name: str) -> str:
 def main() -> int:
     problems: list[str] = []
 
-    if env("COINDCX_API_KEY") and env("COINDCX_API_SECRET"):
+    # CoinDCX key ab fixed IP (Oracle proxy) se bandhi hai -> proxy set ho tabhi check karo
+    if env("COINDCX_API_KEY") and env("COINDCX_API_SECRET") and env("COINDCX_PROXY"):
         ok, detail = check_coindcx()
         print(f"CoinDCX: {ok} | {detail}")
         if ok is False:
