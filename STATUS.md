@@ -2,9 +2,9 @@
 
 > **EDUCATIONAL PURPOSE ONLY.** Paper trading, no real orders, not financial advice. Backtest and paper results do not guarantee future results.
 
-- Updated: 2026-10-31 07:43 UTC | Started: 2026-10-28 00:32 UTC
+- Updated: 2026-10-31 08:47 UTC | Started: 2026-10-28 00:32 UTC
 - Instrument: B-PAXG_USDT 15m | Paper capital ₹3,000 x 30x = ₹90,000 per trade | USD/INR 88 | fee 0.025% + slippage 0.03% per side
-- Last price: $3,894.98 | Today (2026-10-31): weekend - no trading
+- Last price: $3,895.16 | Today (2026-10-31): weekend - no trading
 
 ## Open position
 None
